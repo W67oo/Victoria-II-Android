@@ -1474,6 +1474,20 @@ ledger_inflation_adjusted_gdp;GDP(inflation-adjusted)
 ledger_inflation_adjusted_gdp_per_capita;GDP(inflation-adjusted) per 1m people
 ledger_standard_of_living;Standard of Living
 alice_ledger_header_gdp_history;GDP(inflation-adjusted) over time
+alice_ledger_header_finance;National Macro-Finance & Capital Markets
+alice_ledger_rating;Rating
+alice_ledger_rate;Rate
+alice_ledger_standard;Standard
+alice_ledger_bullion;Bullion
+alice_ledger_stock_cap;Stock Cap
+alice_ledger_st_div;State Div
+alice_ledger_market_pe;Avg P/E
+alice_ledger_rating_tip;Sovereign Credit Rating: affects debt spreads and borrowing costs
+alice_ledger_rate_tip;Central Bank Discount Rate: governs liquidity and required equity return
+alice_cur_gold;Gold
+alice_cur_silver;Silver
+alice_cur_bimetal;Bimetal
+alice_cur_fiat;Fiat
 alice_countryalert_colonialgood_start;You can colonize $region$
 alice_overseas_mil_description;Overseas militancy
 alice_armygroup_go_to_selection;Add/remove units

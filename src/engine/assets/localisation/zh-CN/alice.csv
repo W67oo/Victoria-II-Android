@@ -1201,6 +1201,20 @@ CANCEL_WARSUBSIDIES_OTHER_ACCEPT_LOG;$ACTOR$ 已停止给与 $RECIPIENT$ 战争�
 CANCEL_WARSUBSIDIES_DESC;取消对此国的资金援助
 ledger_standard_of_living;生活条件
 alice_ledger_header_gdp_history;通胀后购买力 GDP 历史
+alice_ledger_header_finance;国家金融与资本市场总览
+alice_ledger_rating;信用评级
+alice_ledger_rate;贴现利率
+alice_ledger_standard;货币本位
+alice_ledger_bullion;贵金属储备
+alice_ledger_stock_cap;股市总值
+alice_ledger_st_div;国企分红
+alice_ledger_market_pe;平均市盈率
+alice_ledger_rating_tip;主权信用评级：影响国家国债发行利差与借贷成本
+alice_ledger_rate_tip;中央银行基准利率：调控国内流动性与投资收益率
+alice_cur_gold;金本位
+alice_cur_silver;银本位
+alice_cur_bimetal;复本位
+alice_cur_fiat;信用纸币
 alice_countryalert_colonialgood_start;我们可以在 $region$ 开始殖民
 alice_overseas_mil_description;海外部队
 alice_armygroup_go_to_selection;添加/删除单位
