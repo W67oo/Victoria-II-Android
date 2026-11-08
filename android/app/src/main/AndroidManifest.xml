@@ -1,36 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- OpenGL ES 3.2 required for Project Alice shaders & SDF/9-Slice UI -->
     <uses-feature android:glEsVersion="0x00030002" android:required="true" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Storage permissions to access Victoria II game directory from internal storage / SD card (POSIX open/stat/mmap) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:ignore="ScopedStorage" />
 
     <application
         android:allowBackup="true"
-        android:label="Victoria II Mobile"
+        android:label="维多利亚 2 移动端"
         android:largeHeap="true"
+        android:hasCode="true"
+        android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat.NoActionBar">
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
         <activity
-            android:name=".LauncherActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density"
+            android:name=".AliceActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize|density|uiMode"
             android:exported="true"
             android:screenOrientation="sensorLandscape">
+
+            <meta-data android:name="android.app.lib_name" android:value="vic2mobile" />
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".Vic2GameActivity"
-            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
-            android:exported="false"
-            android:hardwareAccelerated="true"
-            android:launchMode="singleTask"
-            android:preferMinimalPostProcessing="true"
-            android:screenOrientation="sensorLandscape" />
 
     </application>
 

@@ -5,6 +5,9 @@
 #include "sound.hpp"
 #include "nine_slice_renderer.hpp"
 #include "runtime_config_android.hpp"
+#include "central_bank.hpp"
+#include "stock_exchange.hpp"
+#include "dual_ownership.hpp"
 #include <fmt/format.h>
 #include <algorithm>
 
@@ -176,7 +179,32 @@ void mobile_topbar_window::update_tooltip(sys::state& state, int32_t /*x*/, int3
         break;
     }
     case TopbarSection::InflationCredit: {
-        text::add_to_layout_box(state, contents, box, std::string_view("Credit Rating: AAA | Inflation: +1.5% (Stable)"));
+        auto const& cb = economy::get_central_bank(state, n);
+        auto const& sm = economy::stock_market::get_national_metrics(state, n);
+        float state_div = economy::dual_ownership::get_daily_state_dividends(n);
+
+        static constexpr const char* s_rating_names[] = {
+            "AAA", "AA", "A", "BBB", "BB", "B", "CCC", "C", "Default"
+        };
+        const char* rating_str = (static_cast<size_t>(cb.credit_rating) < 9)
+            ? s_rating_names[static_cast<size_t>(cb.credit_rating)]
+            : "NR";
+
+        std::string crunch_status = sm.credit_crunch_active
+            ? fmt::format(" [CRUNCH: {:.0f}%]", sm.credit_crunch_severity * 100.0f)
+            : " [Normal]";
+
+        text::add_to_layout_box(state, contents, box,
+            fmt::format("Rating: {} | Rate: {:.1f}% | Infl: {:+.1f}% | Stock: {:.0f} pts (P/E: {:.1f}) | StDiv: +{:.1f} £{}",
+                rating_str,
+                cb.base_interest_rate * 100.0f,
+                cb.inflation_rate * 100.0f,
+                sm.composite_index,
+                sm.average_pe,
+                state_div,
+                crunch_status
+            )
+        );
         break;
     }
     case TopbarSection::Research: {

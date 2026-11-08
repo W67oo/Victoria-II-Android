@@ -173,3 +173,6 @@ legend_max_mapmode_45;低 供应损失
 legend_max_mapmode_46;高 供应吞吐
 legend_max_mapmode_47;高 容量
 legend_max_mapmode_48;高 效率
+mapmode_51;MAPI物价区
+mapmode_52;货币通胀热力
+mapmode_53;公私股权分布

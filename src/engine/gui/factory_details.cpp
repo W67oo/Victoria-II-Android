@@ -7,6 +7,8 @@
 #include "labour_details.hpp"
 #include "commands.hpp"
 #include "ai_economy.hpp"
+#include "dual_ownership.hpp"
+#include "stock_exchange.hpp"
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
@@ -171,6 +173,7 @@ struct factory_details_main_subsidy_t : public alice_ui::template_label {
 };
 struct factory_details_main_total_investments_value_t : public alice_ui::template_label {
 // BEGIN main::total_investments_value::variables
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
 // END
 	void on_update(sys::state& state) noexcept override;
 };
@@ -686,6 +689,33 @@ void factory_details_main_subsidy_t::on_update(sys::state& state) noexcept {
 	set_text(state, text::format_money(main.last_explanation.revenue_from_subsidies));
 // END
 }
+void factory_details_main_total_investments_value_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
+	auto factory = state.selected_factory;
+	float state_share = economy::dual_ownership::get_factory_state_ownership(state, factory);
+	auto quote = economy::stock_market::get_factory_quote(state, factory);
+
+	auto box = text::open_layout_box(contents, 0);
+	text::add_to_layout_box(state, contents, box, std::string("【企业资本与股权结构】\n"));
+	text::add_to_layout_box(state, contents, box, "国家股权份额: " + text::format_percentage(state_share, 1) + "\n");
+	text::add_to_layout_box(state, contents, box, "民间资本份额: " + text::format_percentage(1.0f - state_share, 1) + "\n");
+	if (quote.is_public) {
+		text::add_to_layout_box(state, contents, box, std::string("上市状态: 已在国家证券交易所挂牌\n"));
+		text::add_to_layout_box(state, contents, box, "当前股价: £ " + text::format_float(quote.share_price, 2) + "\n");
+		text::add_to_layout_box(state, contents, box, "企业估值 (市值): £ " + text::format_float(quote.market_cap, 1) + "\n");
+		text::add_to_layout_box(state, contents, box, "动态市盈率 (P/E): " + text::format_float(quote.pe_ratio, 1) + "x\n");
+		text::add_to_layout_box(state, contents, box, "年化股息收益率: " + text::format_percentage(quote.dividend_yield, 2) + "\n");
+	} else {
+		text::add_to_layout_box(state, contents, box, std::string("上市状态: 未公开交易 (非上市公司)\n"));
+		text::add_to_layout_box(state, contents, box, "估值 (净资产+重置成本): £ " + text::format_float(quote.market_cap, 1) + "\n");
+	}
+	if (quote.in_distress) {
+		text::add_to_layout_box(state, contents, box, std::string("财务状况: 处于严重亏损与流动性枯竭中 (重组预警)"));
+	} else {
+		text::add_to_layout_box(state, contents, box, std::string("财务状况: 正常稳健"));
+	}
+	text::close_layout_box(contents, box);
+}
+
 void factory_details_main_total_investments_value_t::on_update(sys::state& state) noexcept {
 	factory_details_main_t& main = *((factory_details_main_t*)(parent)); 
 // BEGIN main::total_investments_value::update

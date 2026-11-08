@@ -2211,3 +2211,5 @@ term_clamp_high_with;上限：?Y$x$?W 来自上家 ?Y$value$?W
 expected_import_price;预期进口价
 expected_export_price;预期出口价
 trade_volume_speed_multiplier;速度乘数
+nationalize_factory;国有化企业;Nationalize Factory;;;;;;;;;;;;;x
+privatize_factory;企业私有化;Privatize Factory;;;;;;;;;;;;;x

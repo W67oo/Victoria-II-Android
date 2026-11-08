@@ -66,4 +66,9 @@ const char* get_rating_str(sovereign_credit_rating rating);
 const char* get_currency_symbol(sys::state const& state, dcon::nation_id n);
 const char* get_currency_name(sys::state const& state, dcon::nation_id n);
 
+// State persistence & serialization
+size_t serialize_central_banks_size();
+uint8_t* serialize_central_banks(uint8_t* ptr_out);
+uint8_t const* deserialize_central_banks(uint8_t const* ptr_in);
+
 } // namespace economy

@@ -1,5 +1,6 @@
 #include "system_state.hpp"
 #include "ai_economy.hpp"
+#include "dual_ownership.hpp"
 #include "ai_campaign_values.hpp"
 #include "economy_stats.hpp"
 #include "economy_production.hpp"
@@ -930,6 +931,60 @@ void update_budget(sys::state& state, bool presim) {
 
 		economy::bound_budget_settings(state, n);
 	});
+}
+
+
+void update_ai_dual_ownership(sys::state& state) {
+	for (auto n : state.world.in_nation) {
+		if (!n.get_is_civilized() || n.get_owned_province_count() == 0 || n.get_is_player_controlled()) {
+			continue;
+		}
+
+		dcon::nation_id nid = n.id;
+		float treasury = state.world.nation_get_treasury(nid);
+		float total_debt = state.world.nation_get_local_loan(nid);
+		float investment_pool = state.world.nation_get_private_investment(nid);
+
+		// 1. Fiscal Distress / Sovereign Debt Relief: AI privatizes state shares to raise liquidity
+		if ((total_debt > 3000.0f || treasury < 300.0f) && investment_pool > 300.0f) {
+			bool privatized_any = false;
+			state.world.nation_for_each_province_ownership_as_nation(nid, [&](dcon::province_ownership_id po) {
+				if (privatized_any) return;
+				auto prov = state.world.province_ownership_get_province(po);
+				state.world.province_for_each_factory_location_as_province(prov, [&](auto loc) {
+					if (privatized_any) return;
+					auto fac = state.world.factory_location_get_factory(loc);
+					float state_share = economy::dual_ownership::get_factory_state_ownership(state, fac);
+					if (state_share > 0.05f) {
+						if (economy::dual_ownership::privatize_factory(state, fac)) {
+							privatized_any = true;
+						}
+					}
+				});
+			});
+		}
+		// 2. High State Solvency & Planned/State Capitalist Industrialization: AI nationalizes/invests
+		else if (treasury > 8000.0f && total_debt < 500.0f) {
+			auto rules = state.world.nation_get_combined_issue_rules(nid);
+			if ((rules & issue_rule::build_factory) != 0) {
+				bool nationalized_any = false;
+				state.world.nation_for_each_province_ownership_as_nation(nid, [&](dcon::province_ownership_id po) {
+					if (nationalized_any) return;
+					auto prov = state.world.province_ownership_get_province(po);
+					state.world.province_for_each_factory_location_as_province(prov, [&](auto loc) {
+						if (nationalized_any) return;
+						auto fac = state.world.factory_location_get_factory(loc);
+						float state_share = economy::dual_ownership::get_factory_state_ownership(state, fac);
+						if (state_share < 0.50f) {
+							if (economy::dual_ownership::nationalize_factory(state, fac, economy::dual_ownership::nationalization_mode::compensated)) {
+								nationalized_any = true;
+							}
+						}
+					});
+				});
+			}
+		}
+	}
 }
 
 }

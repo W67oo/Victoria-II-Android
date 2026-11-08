@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <functional>
 #include <thread>
 #include "system_state.hpp"
@@ -1195,18 +1195,22 @@ void state::on_create() {
 		int status;
 		status = luaL_dostring(lua_ui_environment, lua_combined_script.c_str());
 		if(status) {
+			const char* err_str = lua_tostring(lua_ui_environment, -1);
 #ifdef _WIN32
-			OutputDebugStringA(lua_tostring(lua_ui_environment, -1));
+			OutputDebugStringA(err_str ? err_str : "Unknown lua error");
 #endif
+			window::emit_error_message(std::string("Lua UI Script Error (combined):\n") + (err_str ? err_str : "unknown"), true);
 			lua_settop(lua_ui_environment, 0);
 			std::abort();
 		}
 
 		status = luaL_dostring(lua_ui_environment, lua_ui_script.c_str());
 		if(status) {
+			const char* err_str = lua_tostring(lua_ui_environment, -1);
 #ifdef _WIN32
-			OutputDebugStringA(lua_tostring(lua_ui_environment, -1));
+			OutputDebugStringA(err_str ? err_str : "Unknown lua error");
 #endif
+			window::emit_error_message(std::string("Lua UI Script Error (ui_script):\n") + (err_str ? err_str : "unknown"), true);
 			lua_settop(lua_ui_environment, 0);
 			std::abort();
 		}
@@ -1306,61 +1310,88 @@ void state::reset_locale_pool() {
 void state::load_locale_strings(std::string_view locale_name) {
 	auto root_dir = get_root(common_fs);
 	auto assets_dir = open_directory(root_dir, NATIVE("assets/localisation"));
+	auto text_dir = open_directory(root_dir, NATIVE("localisation"));
+	auto all_loc_files = list_files(text_dir, NATIVE(".csv"));
+	std::sort(all_loc_files.begin(), all_loc_files.end(), [](const simple_fs::unopened_file& a, const simple_fs::unopened_file& b) {
+		return simple_fs::get_file_name(a) < simple_fs::get_file_name(b);
+	});
 
-	auto load_base_files = [&](int32_t column) {
-		auto text_dir = open_directory(root_dir, NATIVE("localisation"));
-		// sort list of files so that it will read them in alphabetical order from A-Z, to conform with modding expactations.
-		auto loc_files = list_files(text_dir, NATIVE(".csv"));
-		std::sort(loc_files.begin(), loc_files.end(), [](const simple_fs::unopened_file& a, const simple_fs::unopened_file& b) {
-			return simple_fs::get_file_name(a) > simple_fs::get_file_name(b);
-		});
-		for(auto& file : loc_files) {
-			if(auto ofile = open_file(file); ofile) {
-				auto content = view_contents(*ofile);
-				text::consume_csv_file(*this, content.data, content.file_size, column, false);
+	auto roots = simple_fs::list_roots(common_fs);
+	auto is_mod_file = [&](const simple_fs::unopened_file& f) -> bool {
+		auto full = simple_fs::get_full_name(f);
+		if(full.find(NATIVE("/mod/")) != native_string::npos ||
+		   full.find(NATIVE("\\mod\\")) != native_string::npos ||
+		   full.find(NATIVE("/mod")) != native_string::npos ||
+		   full.find(NATIVE("\\mod")) != native_string::npos) {
+			return true;
+		}
+		for(size_t i = 2; i < roots.size(); ++i) {
+			if(!roots[i].empty() && full.rfind(roots[i], 0) == 0) {
+				return true;
 			}
 		}
-		for(auto& file : list_files(assets_dir, NATIVE(".csv"))) {
-			if(auto ofile = open_file(file); ofile) {
-				auto content = view_contents(*ofile);
-				text::consume_csv_file(*this, content.data, content.file_size, column, false);
-			}
-		}
-		};
+		return false;
+	};
 
-	if(locale_name.starts_with("en")) {
-		load_base_files(1);
-	} else if(locale_name.starts_with("fr")) {
-		load_base_files(2);
-	} else if(locale_name.starts_with("de")) {
-		load_base_files(3);
-	} else if(locale_name.starts_with("pl")) {
-		load_base_files(4);
-	} else if(locale_name.starts_with("es")) {
-		load_base_files(5);
-	} else if(locale_name.starts_with("it")) {
-		load_base_files(6);
-	} else if(locale_name.starts_with("sv")) {
-		load_base_files(7);
-	} else if(locale_name.starts_with("cs")) {
-		load_base_files(8);
-	} else if(locale_name.starts_with("hu")) {
-		load_base_files(9);
-	} else if(locale_name.starts_with("nl")) {
-		load_base_files(10);
-	} else if(locale_name.starts_with("pt")) {
-		load_base_files(11);
-	} else if(locale_name.starts_with("ru")) {
-		load_base_files(12);
-	} else if(locale_name.starts_with("fi")) {
-		load_base_files(13);
+	std::vector<simple_fs::unopened_file> vanilla_loc_files;
+	std::vector<simple_fs::unopened_file> mod_loc_files;
+	for(auto& f : all_loc_files) {
+		if(is_mod_file(f)) {
+			mod_loc_files.push_back(f);
+		} else {
+			vanilla_loc_files.push_back(f);
+		}
 	}
 
+	int32_t vanilla_column = 1;
+	if(locale_name.starts_with("en")) vanilla_column = 1;
+	else if(locale_name.starts_with("fr")) vanilla_column = 2;
+	else if(locale_name.starts_with("de")) vanilla_column = 3;
+	else if(locale_name.starts_with("pl")) vanilla_column = 4;
+	else if(locale_name.starts_with("es")) vanilla_column = 5;
+	else if(locale_name.starts_with("it")) vanilla_column = 6;
+	else if(locale_name.starts_with("sv")) vanilla_column = 7;
+	else if(locale_name.starts_with("cs")) vanilla_column = 8;
+	else if(locale_name.starts_with("hu")) vanilla_column = 9;
+	else if(locale_name.starts_with("nl")) vanilla_column = 10;
+	else if(locale_name.starts_with("pt")) vanilla_column = 11;
+	else if(locale_name.starts_with("ru")) vanilla_column = 12;
+	else if(locale_name.starts_with("fi")) vanilla_column = 13;
+	else vanilla_column = 1;
+
+	// 1. Base Game vanilla localisation (e.g. game_data/localisation/*.csv)
+	for(auto& file : vanilla_loc_files) {
+		if(auto ofile = open_file(file); ofile) {
+			auto content = view_contents(*ofile);
+			text::consume_csv_file(*this, content.data, content.file_size, vanilla_column, false);
+		}
+	}
+	for(auto& file : list_files(assets_dir, NATIVE(".csv"))) {
+		if(auto ofile = open_file(file); ofile) {
+			auto content = view_contents(*ofile);
+			text::consume_csv_file(*this, content.data, content.file_size, vanilla_column, false);
+		}
+	}
+
+	// 2. Built-in target locale strings (e.g. assets/localisation/zh-CN/*.csv)
 	auto locale_dir = open_directory(assets_dir, simple_fs::utf8_to_native(locale_name));
-	for(auto& file : list_files(locale_dir, NATIVE(".csv"))) {
+	auto builtin_locale_files = list_files(locale_dir, NATIVE(".csv"));
+	std::sort(builtin_locale_files.begin(), builtin_locale_files.end(), [](const simple_fs::unopened_file& a, const simple_fs::unopened_file& b) {
+		return simple_fs::get_file_name(a) < simple_fs::get_file_name(b);
+	});
+	for(auto& file : builtin_locale_files) {
 		if(auto ofile = open_file(file); ofile) {
 			auto content = view_contents(*ofile);
 			text::consume_csv_file(*this, content.data, content.file_size, 1, true);
+		}
+	}
+
+	// 3. Plan A: MOD localisation files loaded LAST so mod translations & custom event/province keys take precedence!
+	// (Auto-transcodes legacy GBK / CP936 to UTF-8 on the fly, and supports UTF-8 mods)
+	for(auto& file : mod_loc_files) {
+		if(auto ofile = open_file(file); ofile) {
+			auto content = view_contents(*ofile);
+			text::consume_csv_file(*this, content.data, content.file_size, vanilla_column, false);
 		}
 	}
 }
@@ -1927,7 +1958,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 			auto opened_file = open_file(province_file);
 			if(opened_file) {
 				auto content = view_contents(*opened_file);
-				lua_combined_script += content.data;
+				lua_combined_script.append(content.data, content.file_size);
 				simple_fs::standardize_newlines(lua_combined_script);
 				lua_combined_script += "\n";
 			}
@@ -1936,7 +1967,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 		auto hand_written_wrappers = open_file(assets_lua, NATIVE("custom_ffi.lua"));
 		if(hand_written_wrappers) {
 			auto content = view_contents(*hand_written_wrappers);
-			lua_combined_script += content.data;
+			lua_combined_script.append(content.data, content.file_size);
 			simple_fs::standardize_newlines(lua_combined_script);
 			lua_combined_script += "\n";
 		}
@@ -1946,7 +1977,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 		auto game_loop = open_file(assets_lua, NATIVE("loader_game_loop.lua"));
 		if(game_loop) {
 			auto content = view_contents(*game_loop);
-			lua_game_loop_script += content.data;
+			lua_game_loop_script.append(content.data, content.file_size);
 			simple_fs::standardize_newlines(lua_game_loop_script);
 			lua_game_loop_script += "\n";
 		}
@@ -1956,7 +1987,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 		auto ui_script = open_file(assets_lua, NATIVE("loader_ui.lua"));
 		if(ui_script) {
 			auto content = view_contents(*ui_script);
-			lua_ui_script += content.data;
+			lua_ui_script.append(content.data, content.file_size);
 			simple_fs::standardize_newlines(lua_ui_script);
 			lua_ui_script += "\n";
 		}
@@ -1967,7 +1998,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 			auto opened_file = open_file(lua_file);
 			if(opened_file) {
 				auto content = view_contents(*opened_file);
-				lua_combined_script += content.data;
+				lua_combined_script.append(content.data, content.file_size);
 				simple_fs::standardize_newlines(lua_combined_script);
 				lua_combined_script += "\n";
 			}
@@ -1979,7 +2010,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 			auto opened_file = open_file(lua_file);
 			if(opened_file) {
 				auto content = view_contents(*opened_file);
-				lua_combined_script += content.data;
+				lua_combined_script.append(content.data, content.file_size);
 				simple_fs::standardize_newlines(lua_combined_script);
 				lua_combined_script += "\n";
 			}
@@ -5349,6 +5380,7 @@ void state::single_game_tick() {
 			break;
 		case 18:
 			ai::update_ai_econ_construction(*this);
+			ai::update_ai_dual_ownership(*this);
 			break;
 		case 19:
 			ai::update_budget(*this);

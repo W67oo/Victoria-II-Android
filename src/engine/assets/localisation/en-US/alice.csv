@@ -2215,3 +2215,5 @@ refund_explanation;Ratio of desired goods and services which was actually purcha
 expected_import_price;Expected import price
 expected_export_price;Expected export price
 trade_volume_speed_multiplier;Speed mulltiplier
+nationalize_factory;Nationalize Factory;Nationalize Factory;;;;;;;;;;;;;x
+privatize_factory;Privatize Factory;Privatize Factory;;;;;;;;;;;;;x

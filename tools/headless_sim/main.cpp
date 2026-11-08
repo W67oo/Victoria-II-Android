@@ -14,6 +14,10 @@
 #include "nations.hpp"
 #include "simple_fs.hpp"
 #include "central_bank.hpp"
+#include "dual_ownership.hpp"
+#include "stock_exchange.hpp"
+#include "gbk_transcoder.hpp"
+#include "text.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -132,6 +136,8 @@ int main(int argc, char** argv) {
     native_string native_gd_path = simple_fs::utf8_to_native(opts.game_data_dir);
     simple_fs::add_root(state->common_fs, native_gd_path);
     simple_fs::add_root(state->common_fs, NATIVE("."));
+    simple_fs::add_root(state->common_fs, NATIVE("src/engine"));
+    simple_fs::add_root(state->common_fs, NATIVE("../src/engine"));
 
     native_string native_scenario_path = simple_fs::utf8_to_native(opts.scenario_file);
 
@@ -165,6 +171,69 @@ int main(int argc, char** argv) {
     state->current_scene.game_in_progress = true;
     state->game_seed = 808080;
     economy::initialize_central_banks(*state);
+    economy::dual_ownership::initialize(*state);
+
+    // Test Chinese Locale Loading & Font System
+    std::snprintf(state->user_settings.locale, sizeof(state->user_settings.locale), "zh-CN");
+    state->load_user_settings();
+    for(auto l : state->world.in_locale) {
+        auto ln = l.get_locale_name();
+        auto ln_sv = std::string_view{ (char const*)ln.begin(), ln.size() };
+        if(ln_sv == "zh-CN") {
+            state->font_collection.change_locale(*state, l);
+            break;
+        }
+    }
+    std::cout << "[Localisation] Active locale: " << state->user_settings.locale 
+              << " | Total localized keys: " << state->locale_key_to_text_sequence.size() << "\n";
+    auto print_sample = [&](const char* key_name) {
+        auto k = state->lookup_key(key_name);
+        if(k && state->key_is_localized(k)) {
+            auto it = state->locale_key_to_text_sequence.find(k);
+            if(it != state->locale_key_to_text_sequence.end()) {
+                std::cout << "  - [zh-CN] '" << key_name << "' => '" << state->locale_string_view(it->second) << "'\n";
+            }
+        } else {
+            std::cout << "  - [zh-CN] '" << key_name << "' not localized\n";
+        }
+    };
+    print_sample("LEDGER_COUNTRY_NAME");
+    print_sample("save");
+    print_sample("Start Research");
+    print_sample("badboy");
+    print_sample("mapmode_51");
+    print_sample("mapmode_52");
+    print_sample("mapmode_53");
+
+    // Test Legacy Double-Byte Patch (GBK/CP936) Transcoding and Invariant Check
+    {
+        std::cout << "\n[Legacy Double-Byte Patch Test]\n";
+        // GBK bytes for "斯德哥尔摩" : CB B9 B5 C2 B8 E7 C8 FB
+        const char gbk_raw[] = "\xCB\xB9\xB5\xC2\xB8\xE7\xB6\xFB\xC4\xA6";
+        auto enc = text::detect_charset_encoding(gbk_raw, sizeof(gbk_raw) - 1);
+        std::string utf8_res = text::gbk_to_utf8(std::string_view(gbk_raw, sizeof(gbk_raw) - 1));
+        std::cout << "  - GBK raw byte detection: " << (enc == text::CharsetEncoding::Gbk ? "PASS (GBK)" : "FAIL") << "\n";
+        std::cout << "  - GBK -> UTF-8 transcoding: " << (utf8_res == "斯德哥尔摩" ? "PASS (" + utf8_res + ")" : "FAIL") << "\n";
+
+        // Test Victoria 2 Color Escape in GBK: \xA7R大清帝国\xA7!
+        const char gbk_colored[] = "\xA7\x52\xB4\xF3\xC7\xE5\xB5\xDB\xB9\xFA\xA7\x21";
+        std::string utf8_colored = text::gbk_to_utf8(std::string_view(gbk_colored, sizeof(gbk_colored) - 1));
+        std::cout << "  - Colored GBK transcoding: " << (utf8_colored == "\xC2\xA7R大清帝国\xC2\xA7!" ? "PASS (Section Symbol & Colors Preserved)" : "FAIL") << "\n";
+
+        // Test Simulated Legacy Mod CSV Feeding
+        const char mod_csv_sample[] = "TAG_HPM_TEST;\xCB\xB9\xB5\xC2\xB8\xE7\xB6\xFB\xC4\xA6;Stockholm;x\n";
+        text::consume_csv_file(*state, mod_csv_sample, sizeof(mod_csv_sample) - 1, 1, false);
+        auto mod_k = state->lookup_key("TAG_HPM_TEST");
+        if (mod_k && state->key_is_localized(mod_k)) {
+            auto it = state->locale_key_to_text_sequence.find(mod_k);
+            if (it != state->locale_key_to_text_sequence.end()) {
+                std::cout << "  - Mod CSV GBK Auto-Transcoded Key 'TAG_HPM_TEST' => '" 
+                          << state->locale_string_view(it->second) << "' (PASS)\n";
+            }
+        } else {
+            std::cout << "  - Mod CSV GBK Auto-Transcoded Key 'TAG_HPM_TEST' (FAIL)\n";
+        }
+    }
 
     std::cout << "\n[World Statistics]\n";
     std::cout << "  Provinces:  " << state->world.province_size() << "\n";
@@ -202,6 +271,7 @@ int main(int argc, char** argv) {
     tick_times.reserve(opts.days);
 
     double minted_accumulator = 0.0;
+    double state_divs_accumulator = 0.0;
     auto sim_start_time = std::chrono::high_resolution_clock::now();
 
     for (uint32_t day = 1; day <= opts.days; ++day) {
@@ -222,6 +292,11 @@ int main(int argc, char** argv) {
             });
         });
         minted_accumulator += daily_minted;
+        double daily_state_divs = 0.0;
+        state->world.for_each_nation([&](dcon::nation_id n) {
+            daily_state_divs += economy::dual_ownership::get_daily_state_dividends(n);
+        });
+        state_divs_accumulator += daily_state_divs;
 
         auto t1 = std::chrono::high_resolution_clock::now();
         double tick_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -283,6 +358,50 @@ int main(int argc, char** argv) {
     std::cout << "[Baseline Exported]\n";
     std::cout << "  CSV File: " << opts.csv_file << "\n";
     std::cout << "  Status:   SUCCESS\n\n";
+
+    // Test Save/Load Round-Trip Persistence of Macroeconomic Subsystems
+    {
+        std::cout << "[Save/Load Persistence Test]\n";
+        dcon::factory_id test_fac{0};
+        economy::dual_ownership::set_factory_state_ownership(*state, test_fac, 0.777f);
+
+        dcon::nation_id test_nat{1};
+        auto& cb = economy::get_central_bank_mut(*state, test_nat);
+        cb.base_interest_rate = 0.0888f;
+
+        economy::stock_market::conduct_ipo(*state, test_fac);
+
+        std::string save_name = "test_roundtrip_save";
+        sys::write_save_file(*state, sys::save_type::normal, save_name, save_name);
+        std::cout << "  - Save file written: " << save_name << ".bin\n";
+
+        // Corrupt in-memory state
+        economy::dual_ownership::set_factory_state_ownership(*state, test_fac, 0.0f);
+        cb.base_interest_rate = 0.01f;
+        economy::stock_market::delist_factory(*state, test_fac);
+
+        // Reload save file
+        bool load_ok = sys::try_read_save_file(*state, simple_fs::utf8_to_native(save_name + ".bin"), true);
+        std::cout << "  - Save file reload status: " << (load_ok ? "SUCCESS" : "FAILED") << "\n";
+
+        float restored_share = economy::dual_ownership::get_factory_state_ownership(*state, test_fac);
+        float restored_rate = economy::get_central_bank(*state, test_nat).base_interest_rate;
+        auto restored_quote = economy::stock_market::get_factory_quote(*state, test_fac);
+
+        bool share_ok = std::abs(restored_share - 0.777f) < 0.001f;
+        bool rate_ok = std::abs(restored_rate - 0.0888f) < 0.0001f;
+        bool ipo_ok = (restored_quote.is_public == true);
+
+        std::cout << "  - Factory state ownership restored: " << restored_share << " (Expected: 0.777) => " << (share_ok ? "PASS" : "FAIL") << "\n";
+        std::cout << "  - Central bank discount rate restored: " << (restored_rate * 100.0f) << "% (Expected: 8.88%) => " << (rate_ok ? "PASS" : "FAIL") << "\n";
+        std::cout << "  - Stock IPO listing state restored: " << (restored_quote.is_public ? "Public" : "Private") << " => " << (ipo_ok ? "PASS" : "FAIL") << "\n";
+
+        if (share_ok && rate_ok && ipo_ok) {
+            std::cout << "  - Overall Persistence Integrity: PASS\n\n";
+        } else {
+            std::cout << "  - Overall Persistence Integrity: FAIL\n\n";
+        }
+    }
 
     return 0;
 }

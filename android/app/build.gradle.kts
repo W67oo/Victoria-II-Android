@@ -1,18 +1,35 @@
+import java.util.zip.CRC32
+
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
-val generatedAliceAssetsDir = layout.buildDirectory.dir("generated/alice_assets")
+val aliceAssetsSource = rootProject.file("../src/engine/assets")
+val aliceAssetsOut = layout.buildDirectory.dir("generated/aliceAssets")
 
-val syncAliceBuiltinAssets by tasks.registering(Sync::class) {
-    from("../../src/engine/assets") {
-        into("alice_builtin/assets")
+val prepareAliceAssets by tasks.registering {
+    inputs.dir(aliceAssetsSource)
+    outputs.dir(aliceAssetsOut)
+    doLast {
+        val out = aliceAssetsOut.get().asFile
+        out.deleteRecursively()
+        val dest = File(out, "assets")
+        aliceAssetsSource.copyRecursively(dest, overwrite = true)
+        val luaEngineDir = rootProject.file("../build-android/generated/lua_engine")
+        if (luaEngineDir.exists()) {
+            luaEngineDir.copyRecursively(File(dest, "lua/engine"), overwrite = true)
+        }
+        val manifest = dest.walkTopDown()
+            .filter { it.isFile }
+            .map {
+                val crc = CRC32()
+                crc.update(it.readBytes())
+                it.relativeTo(out).invariantSeparatorsPath + "\t" + it.length() + "\t" + crc.value.toString(16)
+            }
+            .sorted()
+            .joinToString("\n")
+        File(out, "alice_assets_manifest.txt").writeText(manifest + "\n")
     }
-    from("../../build-android/generated/lua_engine") {
-        into("alice_builtin/assets/lua/engine")
-    }
-    into(generatedAliceAssetsDir)
 }
 
 android {
@@ -22,13 +39,12 @@ android {
 
     defaultConfig {
         applicationId = "com.vic2mobile.app"
-        minSdk = 29
+        minSdk = 30
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0-alpha"
+        versionName = "0.2.0-beta"
 
         ndk {
-            // 64-bit ARMv8 only: required for >4GB virtual address space & ARM NEON SIMD
             abiFilters += listOf("arm64-v8a")
         }
 
@@ -47,8 +63,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            java.srcDir("../../upstream/SDL2/android-project/app/src/main/java")
-            assets.srcDir(generatedAliceAssetsDir)
+            assets.srcDir(aliceAssetsOut)
         }
     }
 
@@ -67,6 +82,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
@@ -77,16 +96,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 }
 
 tasks.named("preBuild") {
-    dependsOn(syncAliceBuiltinAssets)
-}
-
-dependencies {
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.appcompat:appcompat:1.7.0")
+    dependsOn(prepareAliceAssets)
 }

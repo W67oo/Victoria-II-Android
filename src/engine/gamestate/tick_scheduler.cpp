@@ -3,6 +3,7 @@
 #include "pop_merger.hpp"
 #include "rebel_clustering.hpp"
 #include "central_bank.hpp"
+#include "stock_exchange.hpp"
 
 namespace vic2_mobile::scheduler {
 
@@ -12,14 +13,16 @@ SchedulerStats& get_stats() noexcept {
     return g_stats;
 }
 
-void execute_daily_tier1(sys::state& /*state*/) {
+void execute_daily_tier1(sys::state& state) {
     ++g_stats.total_daily_ticks;
+    ::economy::stock_market::daily_stock_market_tick(state);
 }
 
 void execute_weekly_tier2(sys::state& state, uint32_t day_of_week) {
     ++g_stats.weekly_ticks_run;
     if (day_of_week == 0) {
         ::economy::update_central_banks_weekly(state);
+        ::economy::stock_market::weekly_stock_market_settlement(state);
     }
 }
 

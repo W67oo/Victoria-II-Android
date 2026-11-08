@@ -5,9 +5,14 @@
 #include "system_state.hpp"
 #include "parsers.hpp"
 #include "simple_fs.hpp"
+#include "gbk_transcoder.hpp"
 #include <type_traits>
 #ifdef _WIN32
 #include <icu.h>
+#elif defined(__ANDROID__)
+#include <unicode/ubrk.h>
+#include <unicode/utypes.h>
+#include "icu_android_compat.hpp"
 #else
 #include <unicode/ubrk.h>
 #include <unicode/utypes.h>
@@ -94,29 +99,66 @@ bool codepoint_is_line_break(uint32_t c) noexcept {
 }
 
 void consume_csv_file(sys::state& state, char const* file_content, uint32_t file_size, int32_t target_column, bool as_unicode) {
+	if(!file_content || file_size == 0) return;
 	auto cpos = file_content;
 
 	if(as_unicode) {
 		if(file_size >= 3) {
-			// skip utf8 BOM if present
-			// 0xEF, 0xBB, 0xBF)
-			if(int(file_content[0]) == 0xEF && int(file_content[1]) == 0xBB && int(file_content[2]) == 0xBF)
+			// skip utf8 BOM if present (0xEF, 0xBB, 0xBF) - cast to uint8_t to prevent signed char promotion bugs
+			if(uint8_t(file_content[0]) == 0xEF && uint8_t(file_content[1]) == 0xBB && uint8_t(file_content[2]) == 0xBF)
 				cpos += 3;
 		}
 		while(cpos < file_content + file_size) {
 			cpos = parsers::parse_fixed_amount_csv_values<14>(cpos, file_content + file_size, ';', [&](std::string_view const* values) {
+				if(values[0].empty() || values[0].front() == '#') return;
+				if(values[target_column].empty()) return;
 				auto key = state.add_key_utf8(values[0]);
 				auto entry = state.add_locale_data_utf8(values[target_column]);
 				state.locale_key_to_text_sequence.insert_or_assign(key, entry);
 			});
 		}
 	} else {
-		while(cpos < file_content + file_size) {
-			cpos = parsers::parse_fixed_amount_csv_values<14>(cpos, file_content + file_size, ';', [&](std::string_view const* values) {
-				auto key = state.add_key_win1252(values[0]);
-				auto entry = state.add_locale_data_win1252(values[target_column]);
-				state.locale_key_to_text_sequence.insert_or_assign(key, entry);
-			});
+		// When as_unicode == false (e.g. loading base game or mod localisation/*.csv):
+		// Automatically detect if the CSV is UTF-8 (with/without BOM), GBK/CP936 (legacy double-byte patch/mod), or Windows-1252!
+		CharsetEncoding enc = detect_charset_encoding(file_content, file_size);
+		if(enc == CharsetEncoding::Utf8Bom) {
+			cpos += 3;
+			enc = CharsetEncoding::Utf8;
+		}
+
+		if(enc == CharsetEncoding::Utf8 || enc == CharsetEncoding::Ascii) {
+			while(cpos < file_content + file_size) {
+				cpos = parsers::parse_fixed_amount_csv_values<14>(cpos, file_content + file_size, ';', [&](std::string_view const* values) {
+					if(values[0].empty() || values[0].front() == '#') return;
+					if(values[target_column].empty()) return;
+					auto key = state.add_key_utf8(values[0]);
+					auto entry = state.add_locale_data_utf8(values[target_column]);
+					state.locale_key_to_text_sequence.insert_or_assign(key, entry);
+				});
+			}
+		} else if(enc == CharsetEncoding::Gbk) {
+			// Legacy double-byte patch (GBK / CP936): transcode on the fly to standard UTF-8!
+			while(cpos < file_content + file_size) {
+				cpos = parsers::parse_fixed_amount_csv_values<14>(cpos, file_content + file_size, ';', [&](std::string_view const* values) {
+					if(values[0].empty() || values[0].front() == '#') return;
+					if(values[target_column].empty()) return;
+					auto key = state.add_key_utf8(values[0]);
+					std::string utf8_text = gbk_to_utf8(values[target_column]);
+					auto entry = state.add_locale_data_utf8(utf8_text);
+					state.locale_key_to_text_sequence.insert_or_assign(key, entry);
+				});
+			}
+		} else {
+			// Standard Western European single-byte Windows-1252
+			while(cpos < file_content + file_size) {
+				cpos = parsers::parse_fixed_amount_csv_values<14>(cpos, file_content + file_size, ';', [&](std::string_view const* values) {
+					if(values[0].empty() || values[0].front() == '#') return;
+					if(values[target_column].empty()) return;
+					auto key = state.add_key_win1252(values[0]);
+					auto entry = state.add_locale_data_win1252(values[target_column]);
+					state.locale_key_to_text_sequence.insert_or_assign(key, entry);
+				});
+			}
 		}
 	}
 }

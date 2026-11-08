@@ -1,4 +1,4 @@
-#include "politics.hpp"
+﻿#include "politics.hpp"
 #include "dcon_generated_ids.hpp"
 #include "demographics.hpp"
 #include "effects.hpp"
@@ -8,6 +8,8 @@
 #include "economy.hpp"
 #include "economy_factory_view.hpp"
 #include "events.hpp"
+#include "culture.hpp"
+#include "modifiers.hpp"
 
 namespace politics {
 
@@ -1004,6 +1006,9 @@ void set_issue_option(sys::state& state, dcon::nation_id n, dcon::issue_option_i
 			uint32_t((opt.index() << 2) ^ n.index()));
 	}
 	state.world.nation_set_issues(n, parent, opt);
+	culture::update_nation_issue_rules(state, n);
+	sys::update_single_nation_modifiers(state, n);
+	economy::bound_budget_settings(state, n);
 }
 void set_reform_option(sys::state& state, dcon::nation_id n, dcon::reform_option_id opt) {
 	auto parent = state.world.reform_option_get_parent_reform(opt);
@@ -1014,6 +1019,9 @@ void set_reform_option(sys::state& state, dcon::nation_id n, dcon::reform_option
 			uint32_t((opt.index() << 2) ^ n.index()));
 	}
 	state.world.nation_set_reforms(n, parent, opt);
+	culture::update_nation_issue_rules(state, n);
+	sys::update_single_nation_modifiers(state, n);
+	economy::bound_budget_settings(state, n);
 }
 
 } // namespace politics

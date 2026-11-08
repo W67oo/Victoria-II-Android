@@ -64,6 +64,50 @@ public:
 	bool left_mouse_down = false;
 };
 } // namespace window
+#elif defined(__ANDROID__)
+struct ANativeWindow;
+struct android_app;
+typedef void* EGLDisplay;
+typedef void* EGLSurface;
+typedef void* EGLContext;
+typedef void* EGLConfig;
+
+namespace window {
+class window_data_impl {
+public:
+	win32_text_services text_services;
+	android_app* app = nullptr;
+	ANativeWindow* native_window = nullptr;
+	EGLDisplay egl_display = nullptr;
+	EGLConfig egl_config = nullptr;
+	EGLSurface egl_surface = nullptr;
+	EGLContext egl_context = nullptr;
+
+	int32_t creation_x_size = 600;
+	int32_t creation_y_size = 400;
+
+	bool in_fullscreen = true;
+	bool left_mouse_down = false;
+
+	bool resumed = false;
+	bool has_focus = false;
+	bool game_started = false;
+	bool loading = false;
+	bool first_run_defaults = false;
+
+	float render_scale = 0.75f;
+	int32_t physical_width = 0, physical_height = 0;
+	int32_t render_width = 0, render_height = 0;
+	std::chrono::steady_clock::time_point last_background_save{};
+};
+
+float android_default_ui_scale(int32_t width, int32_t height, int32_t density_dpi);
+void run_android_main_loop(sys::state& game_state, android_app* app);
+void android_launcher_update(sys::state& game_state);
+void android_set_loading(char const* message);
+void android_set_stats(char const* text);
+void android_start_game(sys::state& game_state);
+} // namespace window
 #else
 struct GLFWwindow;
 

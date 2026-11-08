@@ -1,4 +1,4 @@
-#include "map_modes.hpp"
+﻿#include "map_modes.hpp"
 
 #include "color.hpp"
 #include "color_templates.hpp"
@@ -11,6 +11,9 @@
 #include "economy_production.hpp"
 #include "economy_viewer.hpp"
 #include "money.hpp"
+#include "central_bank.hpp"
+#include "dual_ownership.hpp"
+#include "stock_exchange.hpp"
 
 #include <unordered_map>
 
@@ -1163,6 +1166,88 @@ std::vector<uint32_t> supply_route_efficiency_map_from(sys::state& state) {
 
 namespace map_mode {
 
+
+std::vector<uint32_t> mapi_price_map_from(sys::state& state) {
+	uint32_t province_size = state.world.province_size();
+	uint32_t texture_size = province_size + 256 - province_size % 256;
+	std::vector<uint32_t> prov_color(texture_size * 2);
+
+	state.world.for_each_province([&](dcon::province_id prov_id) {
+		auto nation = state.world.province_get_nation_from_province_ownership(prov_id);
+		if (!nation) return;
+
+		int32_t rails = state.world.province_get_building_level(prov_id, uint8_t(economy::province_building_type::railroad));
+		int32_t port = state.world.province_get_building_level(prov_id, uint8_t(economy::province_building_type::naval_base));
+
+		float mapi = 0.50f + std::min(0.35f, rails * 0.07f) + (port > 0 ? 0.15f : 0.0f);
+		mapi = std::clamp(mapi, 0.0f, 1.0f);
+
+		uint32_t color = ogl::color_gradient_viridis(mapi);
+		auto i = province::to_map_id(prov_id);
+		prov_color[i] = color;
+		prov_color[i + texture_size] = color;
+	});
+	return prov_color;
+}
+
+std::vector<uint32_t> inflation_spread_map_from(sys::state& state) {
+	uint32_t province_size = state.world.province_size();
+	uint32_t texture_size = province_size + 256 - province_size % 256;
+	std::vector<uint32_t> prov_color(texture_size * 2);
+
+	state.world.for_each_province([&](dcon::province_id prov_id) {
+		auto nation = state.world.province_get_nation_from_province_ownership(prov_id);
+		if (!nation) return;
+
+		auto const& cb = economy::get_central_bank(state, nation);
+		float infl = cb.inflation_rate;
+		float norm = std::clamp((infl + 0.02f) / 0.12f, 0.0f, 1.0f);
+
+		uint32_t color = ogl::color_gradient_magma(norm);
+		auto i = province::to_map_id(prov_id);
+		prov_color[i] = color;
+		prov_color[i + texture_size] = color;
+	});
+	return prov_color;
+}
+
+std::vector<uint32_t> equity_ownership_map_from(sys::state& state) {
+	uint32_t province_size = state.world.province_size();
+	uint32_t texture_size = province_size + 256 - province_size % 256;
+	std::vector<uint32_t> prov_color(texture_size * 2);
+
+	state.world.for_each_province([&](dcon::province_id prov_id) {
+		auto nation = state.world.province_get_nation_from_province_ownership(prov_id);
+		if (!nation) return;
+
+		float total_state_equity = 0.0f;
+		float total_equity = 0.0f;
+
+		for (auto fac : state.world.province_get_factory_location(prov_id)) {
+			auto fid = fac.get_factory().id;
+			float size = state.world.factory_get_size(fid);
+			float state_share = economy::dual_ownership::get_factory_state_ownership(state, fid);
+			total_state_equity += size * state_share;
+			total_equity += size;
+		}
+
+		auto i = province::to_map_id(prov_id);
+		if (total_equity <= 0.0f) {
+			prov_color[i] = 0xFF505050;
+			prov_color[i + texture_size] = 0xFF505050;
+		} else {
+			float state_ratio = total_state_equity / total_equity;
+			uint8_t r = static_cast<uint8_t>(48.0f + 176.0f * state_ratio);
+			uint8_t g = static_cast<uint8_t>(128.0f * (1.0f - std::abs(state_ratio - 0.5f) * 2.0f));
+			uint8_t b = static_cast<uint8_t>(224.0f * (1.0f - state_ratio));
+			uint32_t color = 0xFF000000 | (r << 16) | (g << 8) | b;
+			prov_color[i] = color;
+			prov_color[i + texture_size] = color;
+		}
+	});
+	return prov_color;
+}
+
 void set_map_mode(sys::state& state, mode mode) {
 	if(mode == map_mode::mode::handled_from_outside) {
 		return;
@@ -1409,6 +1494,15 @@ void set_map_mode(sys::state& state, mode mode) {
 		break;
 	case mode::supply_route_efficiency:
 		prov_color = supply_route_efficiency_map_from(state);
+		break;
+	case mode::mapi_price:
+		prov_color = mapi_price_map_from(state);
+		break;
+	case mode::inflation_spread:
+		prov_color = inflation_spread_map_from(state);
+		break;
+	case mode::equity_ownership:
+		prov_color = equity_ownership_map_from(state);
 		break;
 	default:
 		return;

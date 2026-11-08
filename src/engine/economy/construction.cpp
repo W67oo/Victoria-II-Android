@@ -11,6 +11,7 @@
 #include "nations_templates.hpp"
 #include "logistics_templates.hpp"
 #include "logistics_constants.hpp"
+#include "stock_exchange.hpp"
 
 namespace economy {
 
@@ -616,9 +617,10 @@ void advance_private_province_building_construction(
 			auto required = base_cost.commodity_amounts[i] * details.cost_multiplier;
 			if(current >= required)
 				continue;
-			auto amount = required / details.construction_time;
+			float max_daily_rate = (0.20f / 7.0f) * required;
+			float daily_rate = std::min(required / details.construction_time, max_daily_rate);
 			auto source_private = state.world.market_get_stockpile(details.market, base_cost.commodity_type[i]);
-			auto delta = std::clamp(required / details.construction_time, 0.f, source_private);
+			auto delta = std::clamp(daily_rate, 0.f, std::min(source_private, required - current));
 			current_purchased[i] += delta;
 			state.world.market_set_stockpile(details.market, base_cost.commodity_type[i], source_private - delta);
 
@@ -883,8 +885,10 @@ void advance_private_factory_construction(
 			auto current = current_purchased[i];
 			auto required = base_cost.commodity_amounts[i] * details.cost_multiplier;
 			if(current >= required)	continue;
+			float max_daily_rate = (0.20f / 7.0f) * required;
+			float daily_rate = std::min(required / details.construction_time, max_daily_rate);
 			auto source_private = state.world.market_get_stockpile(details.market, base_cost.commodity_type[i]);
-			auto delta = std::clamp(required / details.construction_time, 0.f, source_private);
+			auto delta = std::clamp(daily_rate, 0.f, std::min(source_private, required - current));
 			current_purchased[i] += delta;
 			state.world.market_set_stockpile(details.market, base_cost.commodity_type[i], source_private - delta);
 
@@ -901,7 +905,9 @@ tagged_vector<float, dcon::commodity_id> estimate_nation_construction_consumptio
 		float construction_days = static_cast<float>(construction_get_actual_construction_time(state, construction));
 
 		auto accumulate_func = [&](dcon::commodity_id com_id, float required_amount, float total_required) {
-			float demand_amount = std::min(total_required / construction_days * construction_consumption, required_amount); // Tie the demand amount to add to the construction consumption setting of the nation. Low consumption setting -> we won't try to purchase as much
+			float max_daily = (0.20f / 7.0f) * total_required;
+			float demand_rate = std::min(total_required / construction_days, max_daily);
+			float demand_amount = std::min(demand_rate * construction_consumption, required_amount);
 			consumption[com_id] += demand_amount;
 		};
 
@@ -1135,8 +1141,10 @@ void populate_province_building_construction_private_demand(
 		auto probability_to_buy = state.world.market_get_expected_probability_to_buy(details.market, cid);
 		auto confidence_factor = std::min(1.f, std::max(0.f, 0.1f + price_confidence * probability_to_buy));
 		if(current >= required) continue;
+		float max_daily = (0.20f / 7.0f) * required;
+		float daily_rate = std::min(required / details.construction_time, max_daily);
 		auto& cur_demand = state.world.market_get_private_construction_demand(details.market, cid);
-		state.world.market_set_private_construction_demand(details.market, cid, cur_demand + required / details.construction_time * confidence_factor);
+		state.world.market_set_private_construction_demand(details.market, cid, cur_demand + daily_rate * confidence_factor);
 	}
 }
 
@@ -1162,8 +1170,10 @@ void populate_state_construction_private_demand(
 		auto probability_to_buy = state.world.market_get_expected_probability_to_buy(details.market, cid);
 		auto confidence_factor = std::min(1.f, std::max(0.f, 0.1f + price_confidence * probability_to_buy));
 		if(current >= required) continue;
+		float max_daily = (0.20f / 7.0f) * required;
+		float daily_rate = std::min(required / details.construction_time, max_daily);
 		auto& cur_demand = state.world.market_get_private_construction_demand(details.market, cid);
-		state.world.market_set_private_construction_demand(details.market, cid, cur_demand + required / details.construction_time * confidence_factor);
+		state.world.market_set_private_construction_demand(details.market, cid, cur_demand + daily_rate * confidence_factor);
 	}
 }
 
@@ -1375,7 +1385,8 @@ void resolve_constructions(sys::state& state) {
 					change_factory_type_in_province(state, location, type, refit_target);
 				}
 				else {
-					add_factory_level_to_province(state, location, type);
+					bool is_pop = state.world.factory_construction_get_is_pop_project(con);
+					add_factory_level_to_province(state, location, type, is_pop);
 
 					if(owner == state.local_player_nation) {
 						notification::post(state, notification::message{ [](sys::state& state, text::layout_base& contents) {
@@ -1398,6 +1409,10 @@ void resolve_constructions(sys::state& state) {
 void update_private_construction_demand_satisfaction(sys::state& state, dcon::nation_id n) {
 	uint32_t total_commodities = state.world.commodity_size();
 	float p_spending = state.world.nation_get_private_investment_effective_fraction(n);
+	if (economy::stock_market::is_nation_in_credit_crunch(state, n)) {
+		auto metrics = economy::stock_market::get_national_metrics(state, n);
+		p_spending *= std::max(0.15f, 1.0f - 0.70f * metrics.credit_crunch_severity);
+	}
 
 	state.world.nation_for_each_state_ownership(n, [&](auto soid) {
 		auto local_state = state.world.state_ownership_get_state(soid);

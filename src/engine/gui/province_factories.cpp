@@ -7,6 +7,8 @@
 #include "labour_details.hpp"
 #include "commands.hpp"
 #include "ai_economy.hpp"
+#include "dual_ownership.hpp"
+#include "stock_exchange.hpp"
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
@@ -1973,8 +1975,22 @@ void province_factories_table_body_table_body_control_t::on_update(sys::state& s
 
 	set_name_text(state, text::produce_simple_string(state, name));
 	set_hired_text(state, text::prettify((int)table_body.total_hired));
-	set_size_text(state, text::prettify((int)table_body.current_size));
+	int level = std::max(1, (int)std::round(table_body.current_size / 10000.0f));
+	set_size_text(state, "Lv." + std::to_string(level) + " (" + text::prettify((int)table_body.current_size) + ")");
 	set_margin_text(state, text::format_percentage(table_body.profit_margin, 0));
+
+	float state_share = economy::dual_ownership::get_factory_state_ownership(state, factory);
+	auto quote = economy::stock_market::get_factory_quote(state, factory);
+	std::string details_str;
+	if (state_share >= 0.99f) {
+		details_str = "[国企 100%]";
+	} else if (state_share <= 0.01f) {
+		details_str = quote.is_public ? ("[上市 £" + text::format_float(quote.share_price, 1) + "]") : "[私营 100%]";
+	} else {
+		int state_pct = (int)std::round(state_share * 100.0f);
+		details_str = "[国资" + std::to_string(state_pct) + "%/私" + std::to_string(100 - state_pct) + "%]";
+	}
+	set_details_text(state, details_str);
 // END
 }
 void province_factories_table_body_table_body_control_t::on_create(sys::state& state) noexcept {

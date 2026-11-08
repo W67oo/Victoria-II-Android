@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "../gamestate/system_state_forward.hpp"
 
@@ -55,6 +55,10 @@ enum class mode : uint8_t {
 	supply_route_efficiency = 0x30,
 	state_select = 0x31,
 	nation_identity_select = 0x32,
+
+	mapi_price = 0x33,
+	inflation_spread = 0x34,
+	equity_ownership = 0x35,
 
 	handled_from_outside = 0xff
 };

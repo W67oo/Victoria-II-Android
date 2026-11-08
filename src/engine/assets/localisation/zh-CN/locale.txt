@@ -9,3 +9,5 @@ map_font = STXINWEI.TTF
 
 prevent_map_letterspacing = no
 rtl = no
+
+fallback = en-US

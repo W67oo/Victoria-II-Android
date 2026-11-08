@@ -12,6 +12,10 @@
 #include "constants.hpp"
 #ifdef _WIN32
 #include <icu.h>
+#elif defined(__ANDROID__)
+#include <unicode/ubrk.h>
+#include <unicode/utypes.h>
+#include "icu_android_compat.hpp"
 #else
 #include <unicode/ubrk.h>
 #include <unicode/utypes.h>
@@ -345,6 +349,7 @@ void font_manager::change_locale(sys::state& state, dcon::locale_id l) {
 			auto fonts = simple_fs::open_directory(assets, NATIVE("fonts"));
 			auto ff = simple_fs::open_file(fonts, simple_fs::utf8_to_native(fname));
 			if(!ff) {
+				window::emit_error_message(std::string("Font file not found in assets/fonts/: ") + fname, true);
 				std::abort();
 			}
 
@@ -377,6 +382,7 @@ void font_manager::change_locale(sys::state& state, dcon::locale_id l) {
 			auto fonts = simple_fs::open_directory(assets, NATIVE("fonts"));
 			auto ff = simple_fs::open_file(fonts, simple_fs::utf8_to_native(fname));
 			if(!ff) {
+				window::emit_error_message(std::string("Font file not found in assets/fonts/: ") + fname, true);
 				std::abort();
 			}
 
@@ -409,6 +415,7 @@ void font_manager::change_locale(sys::state& state, dcon::locale_id l) {
 			auto fonts = simple_fs::open_directory(assets, NATIVE("fonts"));
 			auto ff = simple_fs::open_file(fonts, simple_fs::utf8_to_native(fname));
 			if(!ff) {
+				window::emit_error_message(std::string("Font file not found in assets/fonts/: ") + fname, true);
 				std::abort();
 			}
 
@@ -424,6 +431,7 @@ void font_manager::change_locale(sys::state& state, dcon::locale_id l) {
 			auto fonts = simple_fs::open_directory(assets, NATIVE("fonts"));
 			auto ff = simple_fs::open_file(fonts, simple_fs::utf8_to_native(fname));
 			if(!ff) {
+				window::emit_error_message(std::string("Font file not found in assets/fonts/: ") + fname, true);
 				std::abort();
 			}
 			auto content = simple_fs::view_contents(*ff);
@@ -440,6 +448,19 @@ void font_manager::change_locale(sys::state& state, dcon::locale_id l) {
 		state.load_locale_strings(fb_name_sv);
 	}
 
+#ifdef __ANDROID__
+	state.font_collection.compiled_ubrk_rules.clear();
+	state.font_collection.compiled_ubrk_rules.push_back(uint8_t(UBreakIteratorType::UBRK_LINE));
+	state.font_collection.compiled_ubrk_rules.insert(state.font_collection.compiled_ubrk_rules.end(), lang_str.begin(), lang_str.end());
+
+	state.font_collection.compiled_char_ubrk_rules.clear();
+	state.font_collection.compiled_char_ubrk_rules.push_back(uint8_t(UBreakIteratorType::UBRK_CHARACTER));
+	state.font_collection.compiled_char_ubrk_rules.insert(state.font_collection.compiled_char_ubrk_rules.end(), lang_str.begin(), lang_str.end());
+
+	state.font_collection.compiled_word_ubrk_rules.clear();
+	state.font_collection.compiled_word_ubrk_rules.push_back(uint8_t(UBreakIteratorType::UBRK_WORD));
+	state.font_collection.compiled_word_ubrk_rules.insert(state.font_collection.compiled_word_ubrk_rules.end(), lang_str.begin(), lang_str.end());
+#else
 	{
 		UErrorCode errorCode = U_ZERO_ERROR;
 		UBreakIterator* lb_it = ubrk_open(UBreakIteratorType::UBRK_LINE, lang_str.c_str(), nullptr, 0, &errorCode);
@@ -488,6 +509,7 @@ void font_manager::change_locale(sys::state& state, dcon::locale_id l) {
 
 		ubrk_close(ch_it);
 	}
+#endif
 
 	state.load_locale_strings(localename_sv);
 }

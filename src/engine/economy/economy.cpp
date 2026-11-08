@@ -31,6 +31,8 @@
 #include "nations_templates.hpp"
 #include "national_budget.hpp"
 #include "central_bank.hpp"
+#include "dual_ownership.hpp"
+#include "stock_exchange.hpp"
 
 namespace economy {
 
@@ -5431,25 +5433,60 @@ void daily_update(sys::state& state, bool presimulation, float presimulation_sta
 	Start with updating rgo/factory "banks"
 	*/
 
+	dual_ownership::reset_daily_stats();
+	static ve::vectorizable_buffer<float, dcon::province_id> province_state_dividend_buffer(uint32_t(1));
+	{
+		static uint32_t old_prov_count = 1;
+		auto new_prov_count = state.world.province_size();
+		if (new_prov_count > old_prov_count) {
+			province_state_dividend_buffer = state.world.province_make_vectorizable_float_buffer();
+			old_prov_count = new_prov_count;
+		}
+	}
+
 	province::for_each_market_province_parallel_over_market(state, [&](dcon::market_id mid, dcon::state_instance_id sid, dcon::province_id pid){
 		{
 			auto total_factory_profit = 0.f;
+			auto total_state_dividend = 0.f;
 			// FACTORIES
 			for(auto f : state.world.province_get_factory_location(pid)) {
 				auto fac = f.get_factory();
 				auto profit = explain_last_factory_profit(state, fac);
 				state.world.factory_set_profit(fac.id, profit.profit);
-				total_factory_profit += profit.profit;
+
+				float state_share = dual_ownership::get_factory_state_ownership(state, fac.id);
+				if (profit.profit > 0.0f && state_share > 0.0f) {
+					float state_div = profit.profit * state_share;
+					total_state_dividend += state_div;
+					total_factory_profit += (profit.profit - state_div);
+				} else {
+					total_factory_profit += profit.profit;
+				}
 			}
 
+			province_state_dividend_buffer.set(pid, total_state_dividend);
+
 			auto current_bank = state.world.province_get_factory_bank(pid);
-			state.world.province_set_factory_bank(pid, current_bank + total_factory_profit);
+			state.world.province_set_factory_bank(pid, std::max(0.0f, current_bank + total_factory_profit));
 		}
 
 		{
 			auto total_rgo_profit = state.world.province_get_rgo_profit(pid);
 			auto current_bank = state.world.province_get_rgo_bank(pid);
 			state.world.province_set_rgo_bank(pid, std::max(0.0f, current_bank + total_rgo_profit));
+		}
+	});
+
+	// Transfer state enterprise dividends directly to national treasuries
+	state.world.for_each_province([&](dcon::province_id pid) {
+		float div = province_state_dividend_buffer.get(pid);
+		if (div > 0.0f) {
+			auto nation = state.world.province_get_nation_from_province_ownership(pid);
+			if (nation) {
+				float treasury = state.world.nation_get_treasury(nation);
+				state.world.nation_set_treasury(nation, treasury + div);
+				dual_ownership::record_state_dividend(nation, div);
+			}
 		}
 	});
 
@@ -6386,7 +6423,7 @@ construction_status factory_upgrade(sys::state& state, dcon::factory_id f) {
 }
 
 
-void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t) {
+void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t, bool is_pop_project) {
 	float base_size = float(state.world.factory_type_get_base_workforce(t));
 
 	// addition of factory level also represents construction of a small factory town or factory-adjacent housing
@@ -6399,7 +6436,10 @@ void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon:
 		auto fac = f.get_factory();
 		auto fac_type = fac.get_building_type();
 		if(f.get_factory().get_building_type() == t) {
-			f.get_factory().set_size(f.get_factory().get_size() + fac_type.get_base_workforce());
+			float old_size = f.get_factory().get_size();
+			float added_size = float(fac_type.get_base_workforce());
+			f.get_factory().set_size(old_size + added_size);
+			dual_ownership::on_factory_expanded(state, fac.id, old_size, added_size, is_pop_project);
 			return;
 		}
 	}
@@ -6418,6 +6458,7 @@ void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon:
 	new_fac.set_technology_scale(0.05f + std::max(0.f, national_t) + std::max(0.f, nationnal_fac_t));
 	state.world.try_create_factory_location(new_fac, p);
 	set_initial_factory_values(state, new_fac);
+	dual_ownership::on_factory_created(state, new_fac, p, is_pop_project);
 }
 
 void change_factory_type_in_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t, dcon::factory_type_id refit_target) {
@@ -6717,6 +6758,7 @@ void prune_factories(sys::state& state) {
 		// to help building more healthy economy instead of 1 profitable giant factory with 6 small 0 scale factories
 		if(deletion_choice) {
 			auto production_type = state.world.factory_get_building_type(deletion_choice);
+			economy::stock_market::delist_factory(state, deletion_choice);
 			state.world.delete_factory(deletion_choice);
 
 			for(auto proj : pid.get_factory_construction()) {
@@ -6773,6 +6815,12 @@ void go_bankrupt(sys::state& state, dcon::nation_id n) {
 	state.world.nation_set_local_loan(n, 0.0f);
 	state.world.nation_set_is_debt_spending(n, false);
 	state.world.nation_set_bankrupt_until(n, state.current_date + int32_t(state.defines.bankrupcy_duration * 365));
+
+	// Macroeconomic Overhaul: Sovereign Credit Rating Default & Emergency Rate
+	auto& cb = economy::get_central_bank_mut(state, n);
+	cb.credit_rating = economy::sovereign_credit_rating::Default;
+	cb.standard = economy::currency_standard::fiat_standard;
+	cb.base_interest_rate = 0.20f;
 
 	notification::post(state, notification::message{
 		[n](sys::state& state, text::layout_base& contents) {

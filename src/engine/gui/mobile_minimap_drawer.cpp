@@ -26,9 +26,9 @@ void mobile_minimap_drawer_window::impl_on_update(sys::state& state) noexcept {
         base_data.position.y = int16_t(state.y_size - insets.bottom - 56);
     } else {
         // Expanded minimap tray
-        base_data.size = xy_pair{ 260, 200 };
+        base_data.size = xy_pair{ 260, 235 };
         base_data.position.x = int16_t(state.x_size - insets.right - 268);
-        base_data.position.y = int16_t(state.y_size - insets.bottom - 208);
+        base_data.position.y = int16_t(state.y_size - insets.bottom - 243);
     }
 
     container_base::impl_on_update(state);
@@ -45,20 +45,20 @@ int32_t mobile_minimap_drawer_window::probe_sub_item(int32_t px, int32_t py) con
     // Compass toggle button in top-right of tray
     if (rel_x >= base_data.size.x - 36 && rel_y <= 36) return 0;
 
-    // Mapmode buttons in bottom grid: 2 rows of 4 items
-    if (rel_y >= 120 && rel_y <= 190) {
+    // Mapmode buttons in bottom grid: 3 rows of 4 items (12 map modes)
+    if (rel_y >= 120 && rel_y <= 225) {
         int32_t row = (rel_y - 120) / 35;
         int32_t col = rel_x / 62;
         int32_t mode_idx = row * 4 + col;
-        if (mode_idx >= 0 && mode_idx < 8) {
-            return 1 + mode_idx; // 1 ~ 8: Map modes
+        if (mode_idx >= 0 && mode_idx < 12) {
+            return 1 + mode_idx; // 1 ~ 12: Map modes
         }
     }
 
-    // Top action buttons: Goto (9) and Ledger (10)
+    // Top action buttons: Goto (13) and Ledger (14)
     if (rel_y >= 8 && rel_y <= 40) {
-        if (rel_x >= 8 && rel_x <= 60) return 9;   // Search / Goto
-        if (rel_x >= 68 && rel_x <= 120) return 10; // Ledger
+        if (rel_x >= 8 && rel_x <= 60) return 13;   // Search / Goto
+        if (rel_x >= 68 && rel_x <= 120) return 14; // Ledger
     }
 
     return -1;
@@ -90,7 +90,7 @@ message_result mobile_minimap_drawer_window::impl_on_lbutton_up(sys::state& stat
 
     if (is_expanded_) {
         // Map mode selection:
-        const map_mode::mode modes[8] = {
+        const map_mode::mode modes[12] = {
             map_mode::mode::terrain,
             map_mode::mode::political,
             map_mode::mode::diplomatic,
@@ -98,21 +98,25 @@ message_result mobile_minimap_drawer_window::impl_on_lbutton_up(sys::state& stat
             map_mode::mode::rgo_output,
             map_mode::mode::infrastructure,
             map_mode::mode::population,
-            map_mode::mode::sphere
+            map_mode::mode::sphere,
+            map_mode::mode::mapi_price,
+            map_mode::mode::inflation_spread,
+            map_mode::mode::equity_ownership,
+            map_mode::mode::civilization_level
         };
-        if (item >= 1 && item <= 8) {
+        if (item >= 1 && item <= 12) {
             map_mode::set_map_mode(state, modes[item - 1]);
             return message_result::consumed;
         }
 
-        if (item == 9 && state.ui_state.search_window) {
+        if (item == 13 && state.ui_state.search_window) {
             bool vis = state.ui_state.search_window->is_visible();
             state.ui_state.search_window->set_visible(state, !vis);
             if (!vis) state.ui_state.root->move_child_to_front(state.ui_state.search_window);
             return message_result::consumed;
         }
 
-        if (item == 10 && state.ui_state.ledger_window) {
+        if (item == 14 && state.ui_state.ledger_window) {
             bool vis = state.ui_state.ledger_window->is_visible();
             state.ui_state.ledger_window->set_visible(state, !vis);
             if (!vis) state.ui_state.root->move_child_to_front(state.ui_state.ledger_window);
@@ -155,8 +159,8 @@ void mobile_minimap_drawer_window::update_tooltip(sys::state& state, int32_t /*x
     auto box = text::open_layout_box(contents, 0);
     if (!is_expanded_ || hovered_item_ == 0) {
         text::add_to_layout_box(state, contents, box, std::string_view("Minimap & Map Modes (Tap to Expand/Collapse)"));
-    } else if (hovered_item_ >= 1 && hovered_item_ <= 8) {
-        const char* names[8] = {
+    } else if (hovered_item_ >= 1 && hovered_item_ <= 12) {
+        const char* names[12] = {
             "Terrain Mode (地形)",
             "Political Mode (政治)",
             "Diplomatic Mode (外交)",
@@ -164,12 +168,16 @@ void mobile_minimap_drawer_window::update_tooltip(sys::state& state, int32_t /*x
             "RGO Goods Mode (资源物产)",
             "Infrastructure Mode (铁路基建)",
             "Population Density (人口密度)",
-            "Sphere of Influence (势力范围)"
+            "Sphere of Influence (势力范围)",
+            "MAPI Price Zone (MAPI物价区)",
+            "Currency Inflation (通胀热力)",
+            "Public/Private Equity (公私双轨股权)",
+            "Civilization Level (文明度)"
         };
         text::add_to_layout_box(state, contents, box, std::string_view(names[hovered_item_ - 1]));
-    } else if (hovered_item_ == 9) {
+    } else if (hovered_item_ == 13) {
         text::add_to_layout_box(state, contents, box, std::string_view("Search & Goto Province (找地)"));
-    } else if (hovered_item_ == 10) {
+    } else if (hovered_item_ == 14) {
         text::add_to_layout_box(state, contents, box, std::string_view("World Ledger (账本榜单)"));
     }
     text::close_layout_box(contents, box);

@@ -13,6 +13,7 @@
 #include <cmath>
 #include <algorithm>
 #include <string>
+#include <cstring>
 
 namespace economy {
 
@@ -266,6 +267,33 @@ const char* get_currency_name(sys::state const& state, dcon::nation_id n) {
     if (tag == "SWE") return "Krona";
     if (tag == "NET") return "Guilder";
     return "Currency";
+}
+
+size_t serialize_central_banks_size() {
+    return sizeof(uint32_t) + s_central_banks.size() * sizeof(central_bank_account);
+}
+
+uint8_t* serialize_central_banks(uint8_t* ptr_out) {
+    uint32_t count = static_cast<uint32_t>(s_central_banks.size());
+    memcpy(ptr_out, &count, sizeof(uint32_t));
+    ptr_out += sizeof(uint32_t);
+    if (count > 0) {
+        memcpy(ptr_out, s_central_banks.data(), count * sizeof(central_bank_account));
+        ptr_out += count * sizeof(central_bank_account);
+    }
+    return ptr_out;
+}
+
+uint8_t const* deserialize_central_banks(uint8_t const* ptr_in) {
+    uint32_t count = 0;
+    memcpy(&count, ptr_in, sizeof(uint32_t));
+    ptr_in += sizeof(uint32_t);
+    s_central_banks.resize(count);
+    if (count > 0) {
+        memcpy(s_central_banks.data(), ptr_in, count * sizeof(central_bank_account));
+        ptr_in += count * sizeof(central_bank_account);
+    }
+    return ptr_in;
 }
 
 } // namespace economy

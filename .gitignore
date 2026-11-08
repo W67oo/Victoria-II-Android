@@ -10,6 +10,9 @@
 /build-host/
 /build-android/
 /build-cxx/
+/build-sim/
+/scratch/
+/assets/
 /android/.gradle/
 /android/.cxx/
 /android/build/

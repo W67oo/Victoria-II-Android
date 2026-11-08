@@ -45,7 +45,34 @@ void notify_user_of_fatal_opengl_error(std::string message) {
 static std::string shader_prefix = "";
 
 void set_shader_prefix(std::string_view source) {
+#ifdef __ANDROID__
+	shader_prefix =
+		"#version 320 es\n"
+		"precision highp float;\n"
+		"precision highp int;\n"
+		"precision highp sampler2D;\n"
+		"precision highp sampler2DArray;\n"
+		"precision highp samplerBuffer;\n"
+		"precision highp isamplerBuffer;\n"
+		"precision highp usampler2D;\n";
+	size_t line_start = 0;
+	while(line_start < source.size()) {
+		size_t line_end = source.find('\n', line_start);
+		if(line_end == std::string_view::npos)
+			line_end = source.size();
+		auto line = source.substr(line_start, line_end - line_start);
+		auto first = line.find_first_not_of(" \t");
+		bool const is_directive = first != std::string_view::npos
+			&& (line.substr(first).starts_with("#version") || line.substr(first).starts_with("#extension"));
+		if(!is_directive) {
+			shader_prefix += line;
+			shader_prefix += '\n';
+		}
+		line_start = line_end + 1;
+	}
+#else
 	shader_prefix = std::string(source);
+#endif
 }
 
 GLint compile_shader(std::string_view source, GLenum type) {
@@ -204,7 +231,7 @@ void initialize_framebuffer_for_province_indices(sys::state& state, int32_t size
 	// prepare textures for rendering
 	glGenTextures(1, &state.open_gl.province_map_rendertexture);
 	glBindTexture(GL_TEXTURE_2D, state.open_gl.province_map_rendertexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size_x, size_y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size_x, size_y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 

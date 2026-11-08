@@ -36,17 +36,6 @@ set(TBB_DISABLE_HWLOC_AUTOMATIC_SEARCH ON CACHE BOOL "" FORCE)
 add_subdirectory("${CMAKE_SOURCE_DIR}/upstream/oneTBB" "${CMAKE_BINARY_DIR}/oneTBB" EXCLUDE_FROM_ALL)
 set_target_properties(tbb PROPERTIES DEBUG_POSTFIX "")
 
-# 2. SDL2 (Android windowing, OpenGL ES surface, multi-touch, soft keyboard -> libSDL2.so)
-if(ANDROID)
-    set(SDL_SHARED ON CACHE BOOL "" FORCE)
-    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-    set(SDL_TEST OFF CACHE BOOL "" FORCE)
-    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-    set(SDL_AUDIO OFF CACHE BOOL "" FORCE)   # Audio handled directly via miniaudio AAudio
-    set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
-    add_subdirectory("${CMAKE_SOURCE_DIR}/upstream/SDL2" "${CMAKE_BINARY_DIR}/SDL2" EXCLUDE_FROM_ALL)
-endif()
-
 # 3. FreeType 2 (static, SDF font rasterizer)
 set(BUILD_SHARED_LIBS OFF)
 set(FT_DISABLE_ZLIB OFF CACHE BOOL "" FORCE)
@@ -159,6 +148,8 @@ set(ALICE_ENGINE_CPP_SOURCES
     "${ALICE_SRC}/economy/demographics.cpp"
     "${ALICE_SRC}/economy/pop_merger.cpp"
     "${ALICE_SRC}/economy/central_bank.cpp"
+    "${ALICE_SRC}/economy/dual_ownership.cpp"
+    "${ALICE_SRC}/economy/stock_exchange.cpp"
     "${ALICE_SRC}/culture/culture.cpp"
     "${ALICE_SRC}/culture/politics.cpp"
     "${ALICE_SRC}/culture/rebels.cpp"
@@ -251,6 +242,7 @@ set(ALICE_ENGINE_CPP_SOURCES
     "${ALICE_SRC}/text/bmfont.cpp"
     "${ALICE_SRC}/text/fonts.cpp"
     "${ALICE_SRC}/text/text.cpp"
+    "${ALICE_SRC}/text/gbk_transcoder.cpp"
     "${ALICE_SRC}/network/SHA512.cpp"
     "${ALICE_SRC}/network/network.cpp"
     "${ALICE_SRC}/network/pcp.cpp"
@@ -358,12 +350,14 @@ set(COMMON_PCH_HEADERS
 
 if(ANDROID)
     add_library(vic2mobile SHARED
+        ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
         "${CMAKE_SOURCE_DIR}/src/platform_android/platform_android_unity.cpp"
         ${ALICE_PLUTOVG_C_SOURCES}
         ${ALICE_ENGINE_CPP_SOURCES}
     )
 
     set_source_files_properties(
+        ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
         "${CMAKE_SOURCE_DIR}/src/platform_android/platform_android_unity.cpp"
         ${ALICE_PLUTOVG_C_SOURCES}
         PROPERTIES SKIP_PRECOMPILE_HEADERS ON
@@ -396,6 +390,8 @@ if(ANDROID)
         -Wno-invalid-offsetof
         -Wno-dangling-else
         -Wno-microsoft-cast
+        -Wno-unguarded-availability
+        -Wno-error=unguarded-availability
         -fstrict-aliasing
         -fno-fast-math
         -ffp-model=precise
@@ -407,6 +403,7 @@ if(ANDROID)
 
     target_link_options(vic2mobile PRIVATE
         -Wl,--export-dynamic
+        "-u" "ANativeActivity_onCreate"
     )
 
     # Force-include ARM64 SIMD compatibility shim on AArch64 before DataContainer ve.hpp
@@ -419,7 +416,8 @@ if(ANDROID)
     target_include_directories(vic2mobile PRIVATE
         $<$<STREQUAL:${CMAKE_SYSTEM_PROCESSOR},aarch64>:${CMAKE_SOURCE_DIR}/src/platform_android/arm64_shim>
         "${CMAKE_SOURCE_DIR}/src/platform_android"
-        "${CMAKE_SOURCE_DIR}/upstream/SDL2/include"
+        "${CMAKE_SOURCE_DIR}/src/platform_android/android_gl"
+        ${ANDROID_NDK}/sources/android/native_app_glue
         ${ALICE_ENGINE_INCLUDES}
     )
 
@@ -427,7 +425,6 @@ if(ANDROID)
 
     target_link_libraries(vic2mobile PRIVATE
         tbb
-        SDL2::SDL2
         freetype
         harfbuzz
         fmt::fmt
@@ -486,6 +483,8 @@ else() # Host Windows build -> vic2_headless_sim executable
         -Wno-invalid-offsetof
         -Wno-dangling-else
         -Wno-microsoft-cast
+        -Wno-unguarded-availability
+        -Wno-error=unguarded-availability
         -fstrict-aliasing
         -fno-fast-math
         -ffp-model=precise

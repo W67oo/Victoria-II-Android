@@ -1268,6 +1268,7 @@ void notify_reload(sys::state& state, network::selector_arg arg, bool host_execu
 bool can_notify_start_game(sys::state& state, dcon::nation_id source);
 void notify_start_game(sys::state& state, network::selector_arg arg, bool host_execute, network::selector_function client_selector);
 void notify_start_game(sys::state& state);
+void execute_notify_start_game(sys::state& state, dcon::nation_id source);
 void notify_player_is_loading(sys::state& state, dcon::mp_player_id loading_player);
 void execute_notify_player_is_loading(sys::state& state, dcon::mp_player_id loading_player);
 void notify_player_fully_loaded(sys::state& state, dcon::nation_id source);

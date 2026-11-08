@@ -81,7 +81,7 @@ void ensure_directories_recursive(const native_string& dir_path) {
     for (char& c : tmp) {
         if (c == '\\') c = '/';
     }
-    mode_t mode = S_IRWXU | S_IRGRP | S_IXGRP;
+    mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO;
     for (size_t i = 1; i < tmp.size(); ++i) {
         if (tmp[i] == '/') {
             tmp[i] = '\0';
@@ -90,6 +90,61 @@ void ensure_directories_recursive(const native_string& dir_path) {
         }
     }
     mkdir(tmp.c_str(), mode);
+}
+
+static native_string resolve_subpath_caseless(native_string_view root, native_string_view rel) {
+    if (rel.empty()) return native_string(root);
+    native_string direct = join_path(root, rel);
+    struct stat st{};
+    if (stat(direct.c_str(), &st) == 0) {
+        return direct;
+    }
+
+    native_string curr(root);
+    std::string_view remaining(rel.data(), rel.size());
+    while (!remaining.empty()) {
+        size_t slash = remaining.find_first_of("/\\");
+        std::string_view seg = (slash == std::string_view::npos) ? remaining : remaining.substr(0, slash);
+        remaining = (slash == std::string_view::npos) ? std::string_view{} : remaining.substr(slash + 1);
+        if (seg.empty() || seg == ".") continue;
+        if (seg == "..") {
+            size_t last_s = curr.find_last_of('/');
+            if (last_s != native_string::npos) curr.resize(last_s);
+            continue;
+        }
+
+        native_string seg_lower;
+        seg_lower.reserve(seg.size());
+        for (char c : seg) seg_lower.push_back(ascii_tolower(c));
+
+        DIR* d = opendir(curr.c_str());
+        if (!d) return {};
+
+        bool found = false;
+        struct dirent* ent = nullptr;
+        while ((ent = readdir(d)) != nullptr) {
+            if (ent->d_name[0] == '.' && (ent->d_name[1] == '\0' || (ent->d_name[1] == '.' && ent->d_name[2] == '\0'))) {
+                continue;
+            }
+            if (std::strlen(ent->d_name) == seg_lower.size()) {
+                bool match = true;
+                for (size_t k = 0; k < seg_lower.size(); ++k) {
+                    if (ascii_tolower(ent->d_name[k]) != seg_lower[k]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    curr = join_path(curr, ent->d_name);
+                    found = true;
+                    break;
+                }
+            }
+        }
+        closedir(d);
+        if (!found) return {};
+    }
+    return curr;
 }
 
 std::optional<unopened_file> find_file_caseless(const directory& dir, native_string_view file_name) {
@@ -310,6 +365,12 @@ std::vector<unopened_file> list_files(directory const& dir, native_char const* e
                 continue;
             }
             DIR* d = opendir(appended_path.c_str());
+            if (!d) {
+                native_string resolved = resolve_subpath_caseless(dir.parent_system->ordered_roots[i], dir.relative_path);
+                if (!resolved.empty()) {
+                    d = opendir(resolved.c_str());
+                }
+            }
             if (d) {
                 struct dirent* dir_ent = nullptr;
                 while ((dir_ent = readdir(d)) != nullptr) {
@@ -359,6 +420,12 @@ std::vector<directory> list_subdirectories(directory const& dir) {
                 continue;
             }
             DIR* d = opendir(appended_path.c_str());
+            if (!d) {
+                native_string resolved = resolve_subpath_caseless(dir.parent_system->ordered_roots[i], dir.relative_path);
+                if (!resolved.empty()) {
+                    d = opendir(resolved.c_str());
+                }
+            }
             if (d) {
                 struct dirent* dir_ent = nullptr;
                 while ((dir_ent = readdir(d)) != nullptr) {
@@ -442,6 +509,31 @@ std::optional<file> open_file(directory const& dir, native_string_view file_name
         }
     }
 
+    // Step-by-step caseless subpath resolution for Linux ext4/f2fs
+    if (dir.parent_system) {
+        for (size_t i = dir.parent_system->ordered_roots.size(); i-- > 0;) {
+            native_string rel_combined = dir.relative_path.empty() ? clean_name : join_path(dir.relative_path, clean_name);
+            native_string resolved = resolve_subpath_caseless(dir.parent_system->ordered_roots[i], rel_combined);
+            if (!resolved.empty()) {
+                if (simple_fs::is_ignored_path(*dir.parent_system, resolved)) continue;
+                int fd = open(resolved.c_str(), O_RDONLY);
+                if (fd != -1) {
+                    std::optional<file> res(file(fd, resolved));
+                    if (res->content.data) return res;
+                }
+            }
+        }
+    } else {
+        native_string resolved = resolve_subpath_caseless(dir.relative_path, clean_name);
+        if (!resolved.empty()) {
+            int fd = open(resolved.c_str(), O_RDONLY);
+            if (fd != -1) {
+                std::optional<file> res(file(fd, resolved));
+                if (res->content.data) return res;
+            }
+        }
+    }
+
     if (auto caseless = find_file_caseless(dir, clean_name); caseless) {
         return open_file(*caseless);
     }
@@ -474,6 +566,29 @@ std::optional<unopened_file> peek_file(directory const& dir, native_string_view 
             return unopened_file(full_path, clean_name);
         }
     }
+
+    if (dir.parent_system) {
+        for (size_t i = dir.parent_system->ordered_roots.size(); i-- > 0;) {
+            native_string rel_combined = dir.relative_path.empty() ? clean_name : join_path(dir.relative_path, clean_name);
+            native_string resolved = resolve_subpath_caseless(dir.parent_system->ordered_roots[i], rel_combined);
+            if (!resolved.empty()) {
+                if (simple_fs::is_ignored_path(*dir.parent_system, resolved)) continue;
+                struct stat sb {};
+                if (stat(resolved.c_str(), &sb) == 0 && S_ISREG(sb.st_mode)) {
+                    return unopened_file(resolved, clean_name);
+                }
+            }
+        }
+    } else {
+        native_string resolved = resolve_subpath_caseless(dir.relative_path, clean_name);
+        if (!resolved.empty()) {
+            struct stat sb {};
+            if (stat(resolved.c_str(), &sb) == 0 && S_ISREG(sb.st_mode)) {
+                return unopened_file(resolved, clean_name);
+            }
+        }
+    }
+
     return find_file_caseless(dir, clean_name);
 }
 
@@ -506,8 +621,8 @@ void write_file(directory const& dir, native_string_view file_name, char const* 
     if (dir.parent_system) std::abort();
     ensure_directories_recursive(dir.relative_path);
     native_string full_path = join_path(dir.relative_path, file_name);
-    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP;
-    int fd = open(full_path.c_str(), O_RDWR | O_CREAT | O_TRUNC, mode);
+    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+    int fd = open(full_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, mode);
     if (fd != -1) {
         int64_t rem = file_size;
         const char* p = file_data;
@@ -518,6 +633,8 @@ void write_file(directory const& dir, native_string_view file_name, char const* 
             rem -= w;
         }
         close(fd);
+    } else {
+        VIC2_LOGE("write_file failed for '%s' (errno=%d: %s)", full_path.c_str(), errno, std::strerror(errno));
     }
 }
 
@@ -525,8 +642,8 @@ void append_file(directory const& dir, native_string_view file_name, char const*
     if (dir.parent_system) std::abort();
     ensure_directories_recursive(dir.relative_path);
     native_string full_path = join_path(dir.relative_path, file_name);
-    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP;
-    int fd = open(full_path.c_str(), O_RDWR | O_CREAT | O_APPEND, mode);
+    mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+    int fd = open(full_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, mode);
     if (fd != -1) {
         int64_t rem = file_size;
         const char* p = file_data;
@@ -537,6 +654,8 @@ void append_file(directory const& dir, native_string_view file_name, char const*
             rem -= w;
         }
         close(fd);
+    } else {
+        VIC2_LOGE("append_file failed for '%s' (errno=%d: %s)", full_path.c_str(), errno, std::strerror(errno));
     }
 }
 
