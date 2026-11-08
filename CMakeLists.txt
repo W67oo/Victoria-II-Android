@@ -37,13 +37,15 @@ add_subdirectory("${CMAKE_SOURCE_DIR}/upstream/oneTBB" "${CMAKE_BINARY_DIR}/oneT
 set_target_properties(tbb PROPERTIES DEBUG_POSTFIX "")
 
 # 2. SDL2 (Android windowing, OpenGL ES surface, multi-touch, soft keyboard -> libSDL2.so)
-set(SDL_SHARED ON CACHE BOOL "" FORCE)
-set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-set(SDL_TEST OFF CACHE BOOL "" FORCE)
-set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-set(SDL_AUDIO OFF CACHE BOOL "" FORCE)   # Audio handled directly via miniaudio AAudio
-set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
-add_subdirectory("${CMAKE_SOURCE_DIR}/upstream/SDL2" "${CMAKE_BINARY_DIR}/SDL2" EXCLUDE_FROM_ALL)
+if(ANDROID)
+    set(SDL_SHARED ON CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_AUDIO OFF CACHE BOOL "" FORCE)   # Audio handled directly via miniaudio AAudio
+    set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${CMAKE_SOURCE_DIR}/upstream/SDL2" "${CMAKE_BINARY_DIR}/SDL2" EXCLUDE_FROM_ALL)
+endif()
 
 # 3. FreeType 2 (static, SDF font rasterizer)
 set(BUILD_SHARED_LIBS OFF)
@@ -76,7 +78,9 @@ unset(BUILD_SHARED_LIBS)
 
 # 6. Host Code Generators (DCON, Parsers, Lua FFI, OOS) + LuaJIT ARM64 W^X Interpreter
 include("${CMAKE_SOURCE_DIR}/cmake/HostToolsBuild.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/LuaJITAndroid.cmake")
+if(ANDROID)
+    include("${CMAKE_SOURCE_DIR}/cmake/LuaJITAndroid.cmake")
+endif()
 
 set(ALICE_SRC "${CMAKE_SOURCE_DIR}/src/engine")
 set(DCON_INC  "${CMAKE_SOURCE_DIR}/src/dcon")
@@ -252,74 +256,10 @@ set(ALICE_ENGINE_CPP_SOURCES
     "${ALICE_SRC}/zstd/zstd.cpp"
 )
 
-add_library(vic2mobile SHARED
-    "${CMAKE_SOURCE_DIR}/src/platform_android/platform_android_unity.cpp"
-    ${ALICE_PLUTOVG_C_SOURCES}
-    ${ALICE_ENGINE_CPP_SOURCES}
-)
-
-set_source_files_properties(
-    "${CMAKE_SOURCE_DIR}/src/platform_android/platform_android_unity.cpp"
-    ${ALICE_PLUTOVG_C_SOURCES}
-    PROPERTIES SKIP_PRECOMPILE_HEADERS ON
-)
-
-add_dependencies(vic2mobile Vic2MobileCodeGen)
-
-target_compile_definitions(vic2mobile PRIVATE
-    INCREMENTAL=1
-    ALICE_NO_ENTRY_POINT=1
-    GLM_ENABLE_EXPERIMENTAL=1
-    DO_NOT_USE_LLVM=1          # Portable Fif bytecode interpreter on ARM64 (SELinux W^X safe)
-    PREFER_ONE_TBB=1           # Use oneTBB task scheduler capped to big cores
-    DCON_GLOBAL_BACKING_MULTIPLIER=1
-    SIMDE_ENABLE_NATIVE_ALIASES=1
-    VIC2_ANDROID_MOBILE=1
-    PROJECT_ROOT="${CMAKE_SOURCE_DIR}/src/engine"
-    $<$<BOOL:${VIC2_DISABLE_MULTIPLAYER}>:VIC2_NO_MULTIPLAYER=1>
-)
-
-target_compile_options(vic2mobile PRIVATE
-    -Wall
-    -Wno-unused-parameter
-    -Wno-unused-variable
-    -Wno-unused-but-set-variable
-    -Wno-unused-private-field
-    -Wno-unused-function
-    -Wno-unused-lambda-capture
-    -Wno-switch
-    -Wno-invalid-offsetof
-    -Wno-dangling-else
-    -Wno-microsoft-cast
-    -fstrict-aliasing
-    -fno-fast-math
-    -ffp-model=precise
-    -ffp-contract=off
-    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG>
-    $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
-)
-
-target_link_options(vic2mobile PRIVATE
-    -Wl,--export-dynamic
-)
-
-# Force-include ARM64 SIMD compatibility shim on AArch64 before DataContainer ve.hpp
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
-    target_compile_options(vic2mobile PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include \"${CMAKE_SOURCE_DIR}/src/platform_android/simd_arm64_compat.hpp\">"
-    )
-endif()
-
-target_include_directories(vic2mobile PRIVATE
-    $<$<STREQUAL:${CMAKE_SYSTEM_PROCESSOR},aarch64>:${CMAKE_SOURCE_DIR}/src/platform_android/arm64_shim>
-    "${CMAKE_SOURCE_DIR}/src/platform_android"
-    "${CMAKE_SOURCE_DIR}/upstream/simde"
-    "${CMAKE_SOURCE_DIR}/upstream/glm"
-    "${CMAKE_SOURCE_DIR}/upstream/fmt/include"
-    "${CMAKE_SOURCE_DIR}/upstream/freetype/include"
-    "${CMAKE_SOURCE_DIR}/upstream/harfbuzz/src"
-    "${CMAKE_SOURCE_DIR}/upstream/SDL2/include"
+# ==============================================================================
+# Target Definitions (Android: vic2mobile.so | Host: vic2_headless_sim.exe)
+# ==============================================================================
+set(ALICE_ENGINE_INCLUDES
     "${GEN_OUT_DIR}/gamestate"
     "${GEN_OUT_DIR}/parsing"
     "${GEN_OUT_DIR}/text"
@@ -358,9 +298,14 @@ target_include_directories(vic2mobile PRIVATE
     "${ALICE_SRC}/zstd"
     "${CMAKE_SOURCE_DIR}/src/engine/dependencies/miniaudio"
     "${CMAKE_SOURCE_DIR}/src/engine/dependencies/stb"
+    "${CMAKE_SOURCE_DIR}/upstream/simde"
+    "${CMAKE_SOURCE_DIR}/upstream/glm"
+    "${CMAKE_SOURCE_DIR}/upstream/fmt/include"
+    "${CMAKE_SOURCE_DIR}/upstream/freetype/include"
+    "${CMAKE_SOURCE_DIR}/upstream/harfbuzz/src"
 )
 
-target_precompile_headers(vic2mobile PRIVATE
+set(COMMON_PCH_HEADERS
     "$<$<COMPILE_LANGUAGE:CXX>:<stddef.h>>"
     "$<$<COMPILE_LANGUAGE:CXX>:<stdint.h>>"
     "$<$<COMPILE_LANGUAGE:CXX>:<assert.h>>"
@@ -411,6 +356,74 @@ target_precompile_headers(vic2mobile PRIVATE
 )
 
 if(ANDROID)
+    add_library(vic2mobile SHARED
+        "${CMAKE_SOURCE_DIR}/src/platform_android/platform_android_unity.cpp"
+        ${ALICE_PLUTOVG_C_SOURCES}
+        ${ALICE_ENGINE_CPP_SOURCES}
+    )
+
+    set_source_files_properties(
+        "${CMAKE_SOURCE_DIR}/src/platform_android/platform_android_unity.cpp"
+        ${ALICE_PLUTOVG_C_SOURCES}
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+    )
+
+    add_dependencies(vic2mobile Vic2MobileCodeGen)
+
+    target_compile_definitions(vic2mobile PRIVATE
+        INCREMENTAL=1
+        ALICE_NO_ENTRY_POINT=1
+        GLM_ENABLE_EXPERIMENTAL=1
+        DO_NOT_USE_LLVM=1          # Portable Fif bytecode interpreter on ARM64 (SELinux W^X safe)
+        PREFER_ONE_TBB=1           # Use oneTBB task scheduler capped to big cores
+        DCON_GLOBAL_BACKING_MULTIPLIER=1
+        SIMDE_ENABLE_NATIVE_ALIASES=1
+        VIC2_ANDROID_MOBILE=1
+        PROJECT_ROOT="${CMAKE_SOURCE_DIR}/src/engine"
+        $<$<BOOL:${VIC2_DISABLE_MULTIPLAYER}>:VIC2_NO_MULTIPLAYER=1>
+    )
+
+    target_compile_options(vic2mobile PRIVATE
+        -Wall
+        -Wno-unused-parameter
+        -Wno-unused-variable
+        -Wno-unused-but-set-variable
+        -Wno-unused-private-field
+        -Wno-unused-function
+        -Wno-unused-lambda-capture
+        -Wno-switch
+        -Wno-invalid-offsetof
+        -Wno-dangling-else
+        -Wno-microsoft-cast
+        -fstrict-aliasing
+        -fno-fast-math
+        -ffp-model=precise
+        -ffp-contract=off
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
+        $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
+    )
+
+    target_link_options(vic2mobile PRIVATE
+        -Wl,--export-dynamic
+    )
+
+    # Force-include ARM64 SIMD compatibility shim on AArch64 before DataContainer ve.hpp
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
+        target_compile_options(vic2mobile PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include \"${CMAKE_SOURCE_DIR}/src/platform_android/simd_arm64_compat.hpp\">"
+        )
+    endif()
+
+    target_include_directories(vic2mobile PRIVATE
+        $<$<STREQUAL:${CMAKE_SYSTEM_PROCESSOR},aarch64>:${CMAKE_SOURCE_DIR}/src/platform_android/arm64_shim>
+        "${CMAKE_SOURCE_DIR}/src/platform_android"
+        "${CMAKE_SOURCE_DIR}/upstream/SDL2/include"
+        ${ALICE_ENGINE_INCLUDES}
+    )
+
+    target_precompile_headers(vic2mobile PRIVATE ${COMMON_PCH_HEADERS})
+
     target_link_libraries(vic2mobile PRIVATE
         tbb
         SDL2::SDL2
@@ -426,4 +439,79 @@ if(ANDROID)
         m
         z
     )
+
+else() # Host Windows build -> vic2_headless_sim executable
+
+    add_executable(vic2_headless_sim
+        "${CMAKE_SOURCE_DIR}/tools/headless_sim/main.cpp"
+        "${CMAKE_SOURCE_DIR}/tools/headless_sim/platform_sim.cpp"
+        ${ALICE_PLUTOVG_C_SOURCES}
+        ${ALICE_ENGINE_CPP_SOURCES}
+    )
+
+    set_source_files_properties(
+        "${CMAKE_SOURCE_DIR}/tools/headless_sim/platform_sim.cpp"
+        ${ALICE_PLUTOVG_C_SOURCES}
+        PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+    )
+
+    add_dependencies(vic2_headless_sim Vic2MobileCodeGen)
+
+    target_compile_definitions(vic2_headless_sim PRIVATE
+        INCREMENTAL=1
+        ALICE_NO_ENTRY_POINT=1
+        GLM_ENABLE_EXPERIMENTAL=1
+        DO_NOT_USE_LLVM=1
+        PREFER_ONE_TBB=1
+        DCON_GLOBAL_BACKING_MULTIPLIER=1
+        SIMDE_ENABLE_NATIVE_ALIASES=1
+        VIC2_NO_MULTIPLAYER=1
+        PROJECT_ROOT="${CMAKE_SOURCE_DIR}/src/engine"
+        NOMINMAX=1
+        WIN32_LEAN_AND_MEAN=1
+    )
+
+    target_compile_options(vic2_headless_sim PRIVATE
+        -Wall
+        -Wno-unused-parameter
+        -Wno-unused-variable
+        -Wno-unused-but-set-variable
+        -Wno-unused-private-field
+        -Wno-unused-function
+        -Wno-unused-lambda-capture
+        -Wno-switch
+        -Wno-invalid-offsetof
+        -Wno-dangling-else
+        -Wno-microsoft-cast
+        -fstrict-aliasing
+        -fno-fast-math
+        -ffp-model=precise
+        -ffp-contract=off
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
+        $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
+    )
+
+    target_include_directories(vic2_headless_sim PRIVATE
+        "${CMAKE_SOURCE_DIR}/tools/headless_sim/include"
+        "${CMAKE_SOURCE_DIR}/tools/headless_sim/include/unicode"
+        ${ALICE_ENGINE_INCLUDES}
+    )
+
+    target_precompile_headers(vic2_headless_sim PRIVATE ${COMMON_PCH_HEADERS})
+
+    target_link_libraries(vic2_headless_sim PRIVATE
+        tbb
+        freetype
+        harfbuzz
+        fmt::fmt
+        "${CMAKE_SOURCE_DIR}/upstream/Project-Alice/libs/luajit.lib"
+        ws2_32
+        ole32
+        shell32
+        user32
+        kernel32
+        advapi32
+    )
+
 endif()

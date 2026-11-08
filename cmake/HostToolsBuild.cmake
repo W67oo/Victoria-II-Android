@@ -8,7 +8,7 @@ set(ENGINE_ROOT   "${CMAKE_SOURCE_DIR}/src/engine")
 set(DCON_INC      "${CMAKE_SOURCE_DIR}/src/dcon")
 set(TOOLS_ROOT    "${CMAKE_SOURCE_DIR}/tools")
 
-if(NOT CMAKE_CROSSCOMPILING)
+if(BUILD_HOST_GENERATORS_ONLY)
     message(STATUS "[HostTools] Configuring native x86_64 code generators (all 5)...")
 
     # 1. DCONGENERATOR
