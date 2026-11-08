@@ -6,14 +6,14 @@ font = { #Font used for normal, regular text
 }
 font = { #Font used for headers and "bold" text
 	id = 2
-	path = "assets/fonts/SourceSerif4Subhead-Regular.ttf"
+	path = "assets/fonts/SourceSerif4Subhead-Regular.otf"
 	fallback = "assets/fonts/LibreCaslonText-Regular.ttf"
 	smallCaps = yes
 }
 font = { #Font used for the map labels
 	id = 3
-	path = "assets/fonts/SourceSerif4Subhead-Regular.ttf"#"assets/fonts/MateSC-Regular.ttf"
-	fallback = "assets/fonts/SourceSerif4Subhead-Regular.ttf"
+	path = "assets/fonts/SourceSerif4Subhead-Regular.otf"#"assets/fonts/MateSC-Regular.ttf"
+	fallback = "assets/fonts/SourceSerif4Subhead-Regular.otf"
 	fallback = "assets/fonts/LibreCaslonText-Regular.ttf"
 	smallCaps = yes
 }
@@ -60,7 +60,7 @@ font = { #Font used for normal, regular text
 }
 font = { #Font used for headers and "bold" text
 	id = 11
-	path = "assets/fonts/NotoSerif-Bold.ttf"
+	path = "assets/fonts/NotoSerif-Regular.ttf"
 	smallCaps = yes
 }
 font = { #Font used for the map labels
@@ -79,12 +79,12 @@ font = { #Font used for normal, regular text
 font = { #Font used for headers and "bold" text
 	id = 14
 	path = "assets/fonts/NotoSansKR-Bold.ttf"
-	fallback = "assets/fonts/SourceSerif4Subhead-Regular.ttf"
+	fallback = "assets/fonts/SourceSerif4Subhead-Regular.otf"
 	smallCaps = no
 }
 font = { #Font used for the map labels
 	id = 15
 	path = "assets/fonts/NotoSansKR-SemiBold.ttf"
-	fallback = "assets/fonts/SourceSerif4Subhead-Regular.ttf"
+	fallback = "assets/fonts/SourceSerif4Subhead-Regular.otf"
 	smallCaps = no
 }

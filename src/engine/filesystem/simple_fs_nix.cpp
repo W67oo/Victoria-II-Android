@@ -567,15 +567,26 @@ void make_directories(native_string const& path) {
 	}
 }
 
+static native_string safe_get_home_path() {
+	char const* h = getenv("HOME");
+	if(h && h[0] != '\0')
+		return native_string(h);
+#ifdef __ANDROID__
+	return native_string("/data/data/com.vic2mobile.app/files");
+#else
+	return native_string(".");
+#endif
+}
+
 directory get_or_create_settings_directory() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/settings/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/settings/";
 	make_directories(path);
 
 	return directory(nullptr, path);
 }
 
 directory get_or_create_save_game_directory(native_string mod_dir) {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/saves/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/saves/";
 	if(mod_dir.length() > 0) {
 		path += mod_dir + NATIVE_DIR_SEPARATOR;
 	}
@@ -585,41 +596,41 @@ directory get_or_create_save_game_directory(native_string mod_dir) {
 }
 
 directory get_or_create_root_documents() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/";
 	make_directories(path);
 
 	return directory(nullptr, path);
 }
 
 directory get_or_create_templates_directory() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/templates/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/templates/";
 	make_directories(path);
 
 	return directory(nullptr, path);
 }
 directory get_or_create_gamerules_directory() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/gamerules/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/gamerules/";
 	make_directories(path);
 
 	return directory(nullptr, path);
 }
 
 directory get_or_create_oos_directory() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/oos/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/oos/";
 	make_directories(path);
 
 	return directory(nullptr, path);
 }
 
 directory get_or_create_data_dumps_directory() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/data_dumps/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/data_dumps/";
 	make_directories(path);
 
 	return directory(nullptr, path);
 }
 
 directory get_or_create_scenario_directory() {
-	native_string path = native_string(getenv("HOME")) + "/.local/share/Alice/scenarios/";
+	native_string path = safe_get_home_path() + "/.local/share/Alice/scenarios/";
 	make_directories(path);
 
 	return directory(nullptr, path);

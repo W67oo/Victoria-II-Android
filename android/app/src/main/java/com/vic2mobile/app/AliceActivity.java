@@ -75,7 +75,6 @@ public class AliceActivity extends NativeActivity {
 			log(Log.INFO, TAG, "libtbb.so loaded successfully");
 		} catch (Throwable t) {
 			recordFatalCrash("Failed to load libtbb.so", t);
-			throw t;
 		}
 
 		try {
@@ -85,7 +84,6 @@ public class AliceActivity extends NativeActivity {
 			log(Log.INFO, TAG, "libvic2mobile.so loaded successfully with ANativeActivity_onCreate");
 		} catch (Throwable t) {
 			recordFatalCrash("Failed to load libvic2mobile.so", t);
-			throw t;
 		}
 	}
 

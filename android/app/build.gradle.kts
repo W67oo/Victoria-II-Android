@@ -81,6 +81,11 @@ android {
         }
     }
 
+    androidResources {
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
+        noCompress += listOf("txt", "ttf", "otf", "aui", "tui", "asvg", "dds", "png", "wav", "mp3")
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false

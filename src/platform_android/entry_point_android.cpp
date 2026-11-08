@@ -75,6 +75,23 @@ std::string need_folder_reason;           // por que a pasta atual nao serve
 // --- Java (AliceActivity) ------------------------------------------------------
 
 // chama um metodo void(String) da AliceActivity, de qualquer thread nativa
+static jstring create_jstring_utf8(JNIEnv* env, std::string const& str) {
+	if(str.empty())
+		return env->NewStringUTF("");
+	jbyteArray bytes = env->NewByteArray(static_cast<jsize>(str.size()));
+	if(!bytes)
+		return env->NewStringUTF("");
+	env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(str.size()), reinterpret_cast<const jbyte*>(str.data()));
+	jclass str_cls = env->FindClass("java/lang/String");
+	jmethodID ctor = env->GetMethodID(str_cls, "<init>", "([BLjava/lang/String;)V");
+	jstring encoding = env->NewStringUTF("UTF-8");
+	jstring result = static_cast<jstring>(env->NewObject(str_cls, ctor, bytes, encoding));
+	env->DeleteLocalRef(bytes);
+	env->DeleteLocalRef(str_cls);
+	env->DeleteLocalRef(encoding);
+	return result;
+}
+
 void call_activity(char const* method, std::string const& argument) {
 	if(!g_app)
 		return;
@@ -90,7 +107,7 @@ void call_activity(char const* method, std::string const& argument) {
 	jclass cls = env->GetObjectClass(activity);
 	jmethodID id = env->GetMethodID(cls, method, "(Ljava/lang/String;)V");
 	if(id) {
-		jstring jarg = env->NewStringUTF(argument.c_str());
+		jstring jarg = create_jstring_utf8(env, argument);
 		env->CallVoidMethod(activity, id, jarg);
 		env->DeleteLocalRef(jarg);
 	}
@@ -152,11 +169,26 @@ bool write_text_file(std::string const& path, std::string const& content) {
 }
 
 std::optional<std::string> read_apk_asset(char const* name) {
-	AAsset* asset = AAssetManager_open(g_app->activity->assetManager, name, AASSET_MODE_BUFFER);
+	AAsset* asset = AAssetManager_open(g_app->activity->assetManager, name, AASSET_MODE_STREAMING);
 	if(!asset)
 		return std::nullopt;
-	std::string content(static_cast<char const*>(AAsset_getBuffer(asset)), size_t(AAsset_getLength(asset)));
+	off_t length = AAsset_getLength(asset);
+	if(length <= 0) {
+		AAsset_close(asset);
+		return std::string();
+	}
+	std::string content;
+	content.resize(size_t(length));
+	int total_read = 0;
+	int read_bytes = 0;
+	while(total_read < length && (read_bytes = AAsset_read(asset, &content[total_read], size_t(length - total_read))) > 0) {
+		total_read += read_bytes;
+	}
 	AAsset_close(asset);
+	if(total_read != length) {
+		LAUNCHER_LOGE("Failed to read full asset %s: %d of %ld bytes", name, total_read, (long)length);
+		return std::nullopt;
+	}
 	return content;
 }
 
@@ -174,7 +206,7 @@ bool extract_alice_assets() {
 		return true;
 	}
 
-	show_progress("姝ｅ湪瑙ｅ帇鍐呯疆寮曟搸璧勬簮 (STZHONGS涓枃瀛椾綋/鐫€鑹插櫒/鐣岄潰瀹氫箟)...");
+	show_progress("正在解压内置引擎资源 (STZHONGS中文字体/着色器/界面定义)...");
 	// a lista antiga sai primeiro: se a extracao for interrompida, recomeca na proxima vez
 	unlink(extracted_manifest_path.c_str());
 
@@ -237,7 +269,7 @@ bool has_subdirectory_caseless(std::string const& base, char const* name) {
 		if(strcasecmp(entry->d_name, name) != 0)
 			continue;
 		struct stat st;
-		if(stat((base + "/" + entry->d_name).c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+		if(entry->d_type == DT_DIR || (stat((base + "/" + entry->d_name).c_str(), &st) == 0 && S_ISDIR(st.st_mode))) {
 			found = true;
 			break;
 		}

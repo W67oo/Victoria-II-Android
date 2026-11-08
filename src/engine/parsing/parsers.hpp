@@ -46,7 +46,13 @@ private:
 
 public:
 	token_generator() { }
-	token_generator(char const* file_start, char const* fe) : position(file_start), file_end(fe) { }
+	token_generator(char const* file_start, char const* fe) : position(file_start), file_end(fe) {
+		if(position && file_end && (file_end - position >= 3)) {
+			if(static_cast<unsigned char>(position[0]) == 0xEF && static_cast<unsigned char>(position[1]) == 0xBB && static_cast<unsigned char>(position[2]) == 0xBF) {
+				position += 3;
+			}
+		}
+	}
 	bool at_end() const {
 		return peek_2.type == token_type::unknown && peek_1.type == token_type::unknown && position >= file_end;
 	}
