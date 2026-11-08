@@ -974,6 +974,22 @@ void android_start_game(sys::state& state) {
 		//    com um shader proprio; numa GPU de celular (tile-based) isso tira as
 		//    4 amostras de cada pixel do chip para a memoria a cada quadro.
 		state.user_settings.antialias_level = 0;
+		if(win.app->config) {
+			char lang[3]{};
+			AConfiguration_getLanguage(win.app->config, lang);
+			if(lang[0] == 'z' && lang[1] == 'h') {
+				std::strncpy(state.user_settings.locale, "zh-CN", sizeof(state.user_settings.locale) - 1);
+				for(auto loc : state.world.in_locale) {
+					auto ln = state.world.locale_get_locale_name(loc);
+					std::string_view sv((char const*)ln.begin(), ln.size());
+					if(sv == "zh-CN") {
+						state.font_collection.change_locale(state, loc);
+						ALICE_LOGI("System language is Chinese (zh), automatically initialized locale to zh-CN");
+						break;
+					}
+				}
+			}
+		}
 		state.save_user_settings();
 		win.first_run_defaults = false;
 		ALICE_LOGI("primeira execucao: escala da interface %.2f (desenho %dx%d, %d dpi efetivos), MSAA desligado", state.user_settings.ui_scale, width, height, render_density);
