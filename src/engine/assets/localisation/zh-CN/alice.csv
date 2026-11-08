@@ -1217,6 +1217,7 @@ alice_cur_bimetal;复本位
 alice_cur_fiat;信用纸币
 alice_budget_income_breakdown;国家每日财政收入细目：
 alice_state_dividends_income;国企利润分红入库: $x$
+alice_budget_soe_dividends;国有企业利润分红
 ipo_factory;企业公开上市 (IPO)
 delist_factory;企业股票退市
 alice_countryalert_colonialgood_start;我们可以在 $region$ 开始殖民

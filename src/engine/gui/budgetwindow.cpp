@@ -169,11 +169,29 @@ struct budgetwindow_main_debt_enable_t : public alice_ui::template_toggle_button
 };
 struct budgetwindow_main_total_debt_amount_t : public alice_ui::template_label {
 // BEGIN main::total_debt_amount::variables
+	ui::message_result on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
+	ui::message_result on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
+	ui::tooltip_behavior has_tooltip(sys::state& state) noexcept override {
+		return ui::tooltip_behavior::variable_tooltip;
+	}
+	ui::message_result test_mouse(sys::state& state, int32_t x, int32_t y, ui::mouse_probe_type type) noexcept override {
+		return ui::message_result::consumed;
+	}
 // END
 	void on_update(sys::state& state) noexcept override;
 };
 struct budgetwindow_main_max_debt_amount_t : public alice_ui::template_label {
 // BEGIN main::max_debt_amount::variables
+	ui::message_result on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
+	ui::message_result on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
+	ui::tooltip_behavior has_tooltip(sys::state& state) noexcept override {
+		return ui::tooltip_behavior::variable_tooltip;
+	}
+	ui::message_result test_mouse(sys::state& state, int32_t x, int32_t y, ui::mouse_probe_type type) noexcept override {
+		return ui::message_result::consumed;
+	}
 // END
 	void on_update(sys::state& state) noexcept override;
 };
@@ -773,6 +791,10 @@ void  budgetwindow_main_income_table_t::update(sys::state& state, layout_window_
 			if(amount > 0.0f) {
 				add_budget_row(text::produce_simple_string(state, state.world.province_get_name(prov)), amount * state.defines.gold_to_cash_rate);
 			}
+		}
+		float soe_div = economy::dual_ownership::get_daily_state_dividends(state.local_player_nation);
+		if(soe_div > 0.0f) {
+			add_budget_row(text::produce_simple_string(state, "alice_budget_soe_dividends"), soe_div);
 		}
 	}
 // END
@@ -1789,18 +1811,121 @@ bool budgetwindow_main_debt_enable_t::button_action(sys::state& state) noexcept 
 // END
 	return true;
 }
+ui::message_result budgetwindow_main_total_debt_amount_t::on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
+	auto nation = state.local_player_nation;
+	auto const& cb = economy::get_central_bank(state, nation);
+	// Increase base discount interest rate by +0.25% (up to 25.0%)
+	float new_rate = std::min(0.25f, cb.base_interest_rate + 0.0025f);
+	command::change_central_bank_policy(state, nation, new_rate, 0);
+	return ui::message_result::consumed;
+}
+
+ui::message_result budgetwindow_main_total_debt_amount_t::on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
+	auto nation = state.local_player_nation;
+	auto const& cb = economy::get_central_bank(state, nation);
+	// Decrease base discount interest rate by -0.25% (down to 0.25%)
+	float new_rate = std::max(0.0025f, cb.base_interest_rate - 0.0025f);
+	command::change_central_bank_policy(state, nation, new_rate, 0);
+	return ui::message_result::consumed;
+}
+
+void budgetwindow_main_total_debt_amount_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
+	auto nation = state.local_player_nation;
+	auto const& cb = economy::get_central_bank(state, nation);
+	auto current_debt = state.world.nation_get_local_loan(nation);
+	auto max_debt = economy::max_loan(state, nation);
+
+	auto box = text::open_layout_box(contents);
+	text::add_to_layout_box(state, contents, box, std::string("【国家中央银行与货币信贷体系】\n"));
+	text::add_to_layout_box(state, contents, box, "央行基准贴现率: " + text::format_percentage(cb.base_interest_rate, 2) + "\n");
+	text::add_to_layout_box(state, contents, box, "主权债务信用评级: " + std::string(economy::get_rating_str(cb.credit_rating)) + " (+" + text::format_percentage(economy::get_credit_spread(cb.credit_rating), 2) + " 信用利差)\n");
+	text::add_to_layout_box(state, contents, box, "国债实际发行收益率: " + text::format_percentage(cb.bond_yield, 2) + "\n");
+	text::add_to_layout_box(state, contents, box, "国债借贷规模: " + text::prettify_currency(current_debt) + " / 上限: " + text::prettify_currency(max_debt) + "\n");
+	text::add_to_layout_box(state, contents, box, "国库金银贵金属储备: " + text::prettify_currency(cb.bullion_reserve) + "\n");
+	text::add_to_layout_box(state, contents, box, "通货膨胀率 (CPI变化): " + text::format_percentage(cb.inflation_rate, 2) + "\n");
+	text::add_to_layout_box(state, contents, box, std::string("【移动端快捷调控】\n"));
+	text::add_to_layout_box(state, contents, box, std::string("▶ 轻触单击 (Tap): 加息 +0.25% (收紧流动性、稳定汇率、平抑通胀)\n"));
+	text::add_to_layout_box(state, contents, box, std::string("▶ 长按 (Long-Press): 降息 -0.25% (释放信贷借贷、刺激工商业与股市估值)"));
+	text::close_layout_box(contents, box);
+}
+
 void budgetwindow_main_total_debt_amount_t::on_update(sys::state& state) noexcept {
 	budgetwindow_main_t& main = *((budgetwindow_main_t*)(parent)); 
 // BEGIN main::total_debt_amount::update
 	auto amount = state.world.nation_get_local_loan(state.local_player_nation);
-	set_text(state, text::prettify_currency(amount));
+	auto const& cb = economy::get_central_bank(state, state.local_player_nation);
+	set_text(state, text::prettify_currency(amount) + " (" + text::format_percentage(cb.base_interest_rate, 1) + ")");
 // END
 }
+
+ui::message_result budgetwindow_main_max_debt_amount_t::on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
+	auto nation = state.local_player_nation;
+	auto const& cb = economy::get_central_bank(state, nation);
+	// Cycle forward: 1(gold) -> 2(silver) -> 3(bimetallic) -> 4(fiat) -> 1
+	uint8_t next_std = 1;
+	switch(cb.standard) {
+		case economy::currency_standard::gold_standard: next_std = 2; break;
+		case economy::currency_standard::silver_standard: next_std = 3; break;
+		case economy::currency_standard::bimetallic_standard: next_std = 4; break;
+		case economy::currency_standard::fiat_standard: next_std = 1; break;
+	}
+	command::change_central_bank_policy(state, nation, -1.0f, next_std);
+	return ui::message_result::consumed;
+}
+
+ui::message_result budgetwindow_main_max_debt_amount_t::on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
+	auto nation = state.local_player_nation;
+	auto const& cb = economy::get_central_bank(state, nation);
+	// Cycle backward: 1(gold) <- 2(silver) <- 3(bimetallic) <- 4(fiat) <- 1
+	uint8_t prev_std = 4;
+	switch(cb.standard) {
+		case economy::currency_standard::gold_standard: prev_std = 4; break;
+		case economy::currency_standard::silver_standard: prev_std = 1; break;
+		case economy::currency_standard::bimetallic_standard: prev_std = 2; break;
+		case economy::currency_standard::fiat_standard: prev_std = 3; break;
+	}
+	command::change_central_bank_policy(state, nation, -1.0f, prev_std);
+	return ui::message_result::consumed;
+}
+
+void budgetwindow_main_max_debt_amount_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
+	auto nation = state.local_player_nation;
+	auto const& cb = economy::get_central_bank(state, nation);
+
+	std::string std_desc;
+	switch(cb.standard) {
+		case economy::currency_standard::gold_standard: std_desc = "金本位制 (硬通货足额支撑，汇率与物价最稳)"; break;
+		case economy::currency_standard::silver_standard: std_desc = "银本位制 (白银储备货币，适应东亚及美洲白银贸易)"; break;
+		case economy::currency_standard::bimetallic_standard: std_desc = "复本位制 (金银双轨平价铸币，兼具流动性与兑现)"; break;
+		case economy::currency_standard::fiat_standard: std_desc = "主权法币 (自由浮动汇率，主权国家信用纸币)"; break;
+	}
+
+	auto box = text::open_layout_box(contents);
+	text::add_to_layout_box(state, contents, box, std::string("【国家法定货币本位与汇率】\n"));
+	text::add_to_layout_box(state, contents, box, "主权货币名称: " + std::string(economy::get_currency_name(state, nation)) + " (" + std::string(economy::get_currency_symbol(state, nation)) + ")\n");
+	text::add_to_layout_box(state, contents, box, "现行法定货币制: " + std_desc + "\n");
+	text::add_to_layout_box(state, contents, box, "国际基准汇率: 1 £ = " + text::format_float(cb.exchange_rate_vs_anchor, 3) + " " + std::string(economy::get_currency_symbol(state, nation)) + "\n");
+	text::add_to_layout_box(state, contents, box, "购买力平价锚 (PPP): " + text::format_float(cb.ppp_anchor, 3) + "\n");
+	text::add_to_layout_box(state, contents, box, "国际收支经常项周差额: " + text::format_money(cb.weekly_bop_balance) + "\n");
+	text::add_to_layout_box(state, contents, box, std::string("【移动端触控交互】\n"));
+	text::add_to_layout_box(state, contents, box, std::string("▶ 轻触单击 (Tap): 顺序切换货币本位 (金本位 -> 银本位 -> 复本位 -> 法币)\n"));
+	text::add_to_layout_box(state, contents, box, std::string("▶ 长按 (Long-Press): 逆向切换货币本位"));
+	text::close_layout_box(contents, box);
+}
+
 void budgetwindow_main_max_debt_amount_t::on_update(sys::state& state) noexcept {
 	budgetwindow_main_t& main = *((budgetwindow_main_t*)(parent)); 
 // BEGIN main::max_debt_amount::update
 	auto amount = economy::max_loan(state, state.local_player_nation);
-	set_text(state, text::prettify_currency(amount));
+	auto const& cb = economy::get_central_bank(state, state.local_player_nation);
+	const char* tag = "金";
+	switch(cb.standard) {
+		case economy::currency_standard::gold_standard: tag = "金"; break;
+		case economy::currency_standard::silver_standard: tag = "银"; break;
+		case economy::currency_standard::bimetallic_standard: tag = "复"; break;
+		case economy::currency_standard::fiat_standard: tag = "币"; break;
+	}
+	set_text(state, text::prettify_currency(amount) + " [" + tag + "]");
 // END
 }
 void budgetwindow_main_debt_chart_t::on_create(sys::state& state) noexcept {
