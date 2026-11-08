@@ -173,6 +173,8 @@ struct factory_details_main_subsidy_t : public alice_ui::template_label {
 };
 struct factory_details_main_total_investments_value_t : public alice_ui::template_label {
 // BEGIN main::total_investments_value::variables
+	ui::message_result on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
+	ui::message_result on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
 	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
 // END
 	void on_update(sys::state& state) noexcept override;
@@ -709,11 +711,32 @@ void factory_details_main_total_investments_value_t::update_tooltip(sys::state& 
 		text::add_to_layout_box(state, contents, box, "估值 (净资产+重置成本): £ " + text::format_float(quote.market_cap, 1) + "\n");
 	}
 	if (quote.in_distress) {
-		text::add_to_layout_box(state, contents, box, std::string("财务状况: 处于严重亏损与流动性枯竭中 (重组预警)"));
+		text::add_to_layout_box(state, contents, box, std::string("财务状况: 处于严重亏损与流动性枯竭中 (重组预警)\n"));
 	} else {
-		text::add_to_layout_box(state, contents, box, std::string("财务状况: 正常稳健"));
+		text::add_to_layout_box(state, contents, box, std::string("财务状况: 正常稳健\n"));
 	}
+	bool can_nat = command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 1, 1.0f);
+	bool can_priv = command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 3, 0.0f);
+	text::add_to_layout_box(state, contents, box, std::string("【移动端触控交互】\n"));
+	text::add_to_layout_box(state, contents, box, "▶ 点击 (Tap): 国家出资赎买国有化 " + std::string(can_nat ? "[点击执行]" : "[不可行/资金不足]") + "\n");
+	text::add_to_layout_box(state, contents, box, "▶ 长按 (Long Press): 股权拍卖民营化 " + std::string(can_priv ? "[长按执行]" : "[不可行/政策禁止]"));
 	text::close_layout_box(contents, box);
+}
+
+ui::message_result factory_details_main_total_investments_value_t::on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
+	auto factory = state.selected_factory;
+	if (command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 1, 1.0f)) {
+		command::change_factory_state_ownership(state, state.local_player_nation, factory, 1, 1.0f);
+	}
+	return ui::message_result::consumed;
+}
+
+ui::message_result factory_details_main_total_investments_value_t::on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
+	auto factory = state.selected_factory;
+	if (command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 3, 0.0f)) {
+		command::change_factory_state_ownership(state, state.local_player_nation, factory, 3, 0.0f);
+	}
+	return ui::message_result::consumed;
 }
 
 void factory_details_main_total_investments_value_t::on_update(sys::state& state) noexcept {

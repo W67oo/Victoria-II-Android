@@ -140,12 +140,14 @@ void update_central_banks_weekly(sys::state& state) {
             cb.credit_rating = sovereign_credit_rating::C;
         }
 
-        // 3. Central Bank Policy Rate (Taylor Reaction Rule)
-        // If inflation > 3.0%, hike discount rate; if deflation < -1.0%, ease discount rate
-        if (cb.inflation_rate > 0.03f) {
-            cb.base_interest_rate = std::min(0.20f, cb.base_interest_rate + 0.0025f);
-        } else if (cb.inflation_rate < -0.01f) {
-            cb.base_interest_rate = std::max(0.015f, cb.base_interest_rate - 0.0025f);
+        // 3. Central Bank Policy Rate (Taylor Reaction Rule for AI nations)
+        // If human player, preserve player's manual policy decision unless AI controls it
+        if (n != state.local_player_nation) {
+            if (cb.inflation_rate > 0.03f) {
+                cb.base_interest_rate = std::min(0.20f, cb.base_interest_rate + 0.0025f);
+            } else if (cb.inflation_rate < -0.01f) {
+                cb.base_interest_rate = std::max(0.015f, cb.base_interest_rate - 0.0025f);
+            }
         }
 
         cb.bond_yield = cb.base_interest_rate + get_credit_spread(cb.credit_rating);
