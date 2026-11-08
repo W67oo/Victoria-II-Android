@@ -569,22 +569,46 @@ public class AliceActivity extends NativeActivity {
 	}
 
 	static String treeUriToPath(Uri uri) {
-		if (!"com.android.externalstorage.documents".equals(uri.getAuthority())) {
-			return null;
-		}
-		String docId;
+		if (uri == null) return null;
+		String authority = uri.getAuthority();
+		String docId = null;
 		try {
 			docId = DocumentsContract.getTreeDocumentId(uri);
-		} catch (Exception e) {
-			return null;
+		} catch (Exception ignored) {
+			try {
+				docId = DocumentsContract.getDocumentId(uri);
+			} catch (Exception ignored2) {}
 		}
-		int colon = docId.indexOf(':');
-		if (colon < 0) return null;
-		String volume = docId.substring(0, colon);
-		String relative = docId.substring(colon + 1);
-		String base = "primary".equalsIgnoreCase(volume)
-			? Environment.getExternalStorageDirectory().getAbsolutePath()
-			: "/storage/" + volume;
-		return relative.isEmpty() ? base : base + "/" + relative;
+		if (docId == null) return null;
+
+		if ("com.android.externalstorage.documents".equals(authority)) {
+			int colon = docId.indexOf(':');
+			if (colon < 0) return null;
+			String volume = docId.substring(0, colon);
+			String relative = docId.substring(colon + 1);
+			String base = "primary".equalsIgnoreCase(volume)
+				? Environment.getExternalStorageDirectory().getAbsolutePath()
+				: "/storage/" + volume;
+			return relative.isEmpty() ? base : base + "/" + relative;
+		}
+
+		if ("com.android.providers.downloads.documents".equals(authority)) {
+			if (docId.startsWith("raw:")) {
+				return docId.substring(4);
+			}
+			int colon = docId.indexOf(':');
+			if (colon >= 0) {
+				String after = docId.substring(colon + 1);
+				if (after.startsWith("/")) return after;
+				File candidate = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), after);
+				if (candidate.exists()) return candidate.getAbsolutePath();
+			}
+			File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+			if (downloadDir != null && downloadDir.exists()) {
+				return downloadDir.getAbsolutePath();
+			}
+		}
+
+		return null;
 	}
 }
