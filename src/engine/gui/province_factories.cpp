@@ -49,6 +49,10 @@ struct province_factories_main_main_header_t : public alice_ui::template_label {
 };
 struct province_factories_main_net_profit_value_t : public alice_ui::template_label {
 // BEGIN main::net_profit_value::variables
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
+	ui::tooltip_behavior has_tooltip(sys::state& state) noexcept override {
+		return ui::tooltip_behavior::variable_tooltip;
+	}
 // END
 	void on_update(sys::state& state) noexcept override;
 };
@@ -614,6 +618,40 @@ void province_factories_main_main_header_t::on_update(sys::state& state) noexcep
 	set_text(state, result);
 // END
 }
+void province_factories_main_net_profit_value_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
+	auto province = state.map_state.selected_province;
+	float total_profit = 0.0f;
+	float state_dividends = 0.0f;
+	float private_dividends = 0.0f;
+	float total_mcap = 0.0f;
+	int32_t factory_count = 0;
+	int32_t public_count = 0;
+
+	for(auto f : state.world.province_get_factory_location(province)) {
+		auto factory = f.get_factory();
+		auto explanation = economy::explain_last_factory_profit(state, factory);
+		float profit = std::max(0.0f, explanation.profit);
+		float state_share = economy::dual_ownership::get_factory_state_ownership(state, factory);
+		state_dividends += profit * state_share;
+		private_dividends += profit * (1.0f - state_share);
+		total_profit += explanation.profit;
+
+		auto const& quote = economy::stock_market::get_factory_quote(state, factory);
+		total_mcap += quote.market_cap;
+		if (quote.is_public) public_count++;
+		factory_count++;
+	}
+
+	auto box = text::open_layout_box(contents);
+	text::add_to_layout_box(state, contents, box, std::string("【本省工业资本与分红核算】\n"));
+	text::add_to_layout_box(state, contents, box, "省内工厂总数: " + std::to_string(factory_count) + " 家 (其中挂牌上市: " + std::to_string(public_count) + " 家)\n");
+	text::add_to_layout_box(state, contents, box, "企业净利润总计: " + text::format_money(total_profit) + " /天\n");
+	text::add_to_layout_box(state, contents, box, "国有股份利润上缴国库: " + text::format_money(state_dividends) + " /天\n");
+	text::add_to_layout_box(state, contents, box, "民间股份向资本家派息: " + text::format_money(private_dividends) + " /天\n");
+	text::add_to_layout_box(state, contents, box, "省内工业企业估值总计: £ " + text::format_float(total_mcap, 1));
+	text::close_layout_box(contents, box);
+}
+
 void province_factories_main_net_profit_value_t::on_update(sys::state& state) noexcept {
 	province_factories_main_t& main = *((province_factories_main_t*)(parent)); 
 // BEGIN main::net_profit_value::update
