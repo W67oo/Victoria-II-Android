@@ -6,6 +6,7 @@
 
 #include <unicode/ubrk.h>
 #include <unicode/ubidi.h>
+#include "cjk_word_break.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -51,61 +52,17 @@ inline bool is_combining_mark(uint32_t cp) noexcept {
 }
 
 inline bool is_cjk_ideograph_or_kana(uint32_t cp) noexcept {
-    return (cp >= 0x3040 && cp <= 0x30FF) || // Hiragana & Katakana
-           (cp >= 0x3400 && cp <= 0x4DBF) || // CJK Unified Ideographs Ext A
-           (cp >= 0x4E00 && cp <= 0x9FFF) || // CJK Unified Ideographs
-           (cp >= 0xAC00 && cp <= 0xD7AF) || // Hangul Syllables
-           (cp >= 0xF900 && cp <= 0xFAFF) || // CJK Compatibility Ideographs
-           (cp >= 0x20000 && cp <= 0x2CEAF); // CJK Ext B..F
+    return text::is_cjk_codepoint(cp);
 }
 
 // Kinsoku Shori: closing / sentence-ending CJK & ASCII punctuation forbidden at line start
 inline bool is_no_break_before(uint32_t cp) noexcept {
-    switch (cp) {
-        case ',': case '.': case '!': case '?': case ';': case ':': case ')': case ']': case '}': case '%':
-        case 0x3001: // 、
-        case 0x3002: // 。
-        case 0xFF0C: // ，
-        case 0xFF0E: // ．
-        case 0xFF01: // ！
-        case 0xFF1F: // ？
-        case 0xFF1B: // ；
-        case 0xFF1A: // ：
-        case 0xFF09: // ）
-        case 0x3009: // 〉
-        case 0x300B: // 》
-        case 0x300D: // 」
-        case 0x300F: // 』
-        case 0x3011: // 】
-        case 0x2019: // ’
-        case 0x201D: // ”
-        case 0x2026: // …
-        case 0x2014: // —
-            return true;
-        default:
-            return false;
-    }
+    return text::is_kinsoku_bol(cp);
 }
 
 // Kinsoku Shori: opening brackets/quotes forbidden at line end
 inline bool is_no_break_after(uint32_t cp) noexcept {
-    switch (cp) {
-        case '(': case '[': case '{':
-        case 0xFF08: // （
-        case 0x3008: // 〈
-        case 0x300A: // 《
-        case 0x300C: // 「
-        case 0x300E: // 『
-        case 0x3010: // 【
-        case 0x2018: // ‘
-        case 0x201C: // “
-        case 0x00A3: // £
-        case 0x00A5: // ¥
-        case '$':
-            return true;
-        default:
-            return false;
-    }
+    return text::is_kinsoku_eol(cp);
 }
 
 inline bool is_whitespace(uint32_t cp) noexcept {

@@ -315,6 +315,7 @@ public:
 
 std::string_view framebuffer_error(GLenum e);
 
+void bind_vertices_by_rotation(sys::state const& state, ui::rotation r, bool flipped, bool rtl);
 void render_colored_rect(sys::state const& state, float x, float y, float width, float height, float red, float green, float blue, ui::rotation r, bool flipped, bool rtl);
 void render_alpha_colored_rect(sys::state const& state, float x, float y, float width, float height, float red, float green, float blue, float alpha);
 void render_simple_rect(sys::state const& state, float x, float y, float width, float height, ui::rotation r, bool flipped, bool rtl);

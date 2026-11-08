@@ -62,24 +62,39 @@ vec4 progress_bar(vec2 tc) {
 	return mix( texture(texture_sampler, tc), texture(secondary_texture_sampler, tc), step(border_size, tc.x));
 }
 //layout(index = 8) subroutine(font_function_class)
+// Enhanced 9-slice adaptive frame stretcher (supports asymmetric margins in subrect)
 vec4 frame_stretch(vec2 tc) {
 	float realx = tc.x * d_rect.z;
 	float realy = tc.y * d_rect.w;
-	vec2 tsize = textureSize(texture_sampler, 0);
+	vec2 tsize = vec2(textureSize(texture_sampler, 0));
+
+	vec4 m = (border_size > 0.0) ? vec4(border_size, border_size, border_size, border_size) : subrect;
+	m = min(m, vec4(d_rect.z * 0.49, d_rect.w * 0.49, d_rect.z * 0.49, d_rect.w * 0.49));
+	m = min(m, vec4(tsize.x * 0.49, tsize.y * 0.49, tsize.x * 0.49, tsize.y * 0.49));
+
 	float xout = 0.0;
 	float yout = 0.0;
-	if(realx <= border_size)
+
+	if(realx <= m.x) {
 		xout = realx / tsize.x;
-	else if(realx >= (d_rect.z - border_size))
-		xout = (1.0 - border_size / tsize.x) + (border_size - (d_rect.z - realx))  / tsize.x;
-	else
-		xout = border_size / tsize.x + (1.0 - 2.0 * border_size / tsize.x) * (realx - border_size) / (d_rect.z * 2.0 * border_size);
-	if(realy <= border_size)
+	} else if(realx >= (d_rect.z - m.z)) {
+		xout = (tsize.x - m.z + (realx - (d_rect.z - m.z))) / tsize.x;
+	} else {
+		float inner_screen_w = max(d_rect.z - m.x - m.z, 0.001);
+		float inner_tex_w    = max(tsize.x - m.x - m.z, 0.001);
+		xout = (m.x + inner_tex_w * ((realx - m.x) / inner_screen_w)) / tsize.x;
+	}
+
+	if(realy <= m.y) {
 		yout = realy / tsize.y;
-	else if(realy >= (d_rect.w - border_size))
-		yout = (1.0 - border_size / tsize.y) + (border_size - (d_rect.w - realy))  / tsize.y;
-	else
-		yout = border_size / tsize.y + (1.0 - 2.0 * border_size / tsize.y) * (realy - border_size) / (d_rect.w * 2.0 * border_size);
+	} else if(realy >= (d_rect.w - m.w)) {
+		yout = (tsize.y - m.w + (realy - (d_rect.w - m.w))) / tsize.y;
+	} else {
+		float inner_screen_h = max(d_rect.w - m.y - m.w, 0.001);
+		float inner_tex_h    = max(tsize.y - m.y - m.w, 0.001);
+		yout = (m.y + inner_tex_h * ((realy - m.y) / inner_screen_h)) / tsize.y;
+	}
+
 	return texture(texture_sampler, vec2(xout, yout));
 }
 //layout(index = 9) subroutine(font_function_class)
@@ -197,9 +212,41 @@ vec4 corners(vec2 tc) {
 	return texture(texture_sampler, vec2(xout, yout) / border_size);
 }
 
-//layout(index = 18) subroutine(font_function_class)
-vec4 transparent_color(vec2 tc) {
-	return vec4(inner_color, 0.5);
+//layout(index = 8) subroutine(font_function_class)
+// Enhanced 9-slice adaptive frame stretcher (supports asymmetric margins in subrect)
+vec4 frame_stretch(vec2 tc) {
+	float realx = tc.x * d_rect.z;
+	float realy = tc.y * d_rect.w;
+	vec2 tsize = vec2(textureSize(texture_sampler, 0));
+
+	vec4 m = (border_size > 0.0) ? vec4(border_size, border_size, border_size, border_size) : subrect;
+	m = min(m, vec4(d_rect.z * 0.49, d_rect.w * 0.49, d_rect.z * 0.49, d_rect.w * 0.49));
+	m = min(m, vec4(tsize.x * 0.49, tsize.y * 0.49, tsize.x * 0.49, tsize.y * 0.49));
+
+	float xout = 0.0;
+	float yout = 0.0;
+
+	if(realx <= m.x) {
+		xout = realx / tsize.x;
+	} else if(realx >= (d_rect.z - m.z)) {
+		xout = (tsize.x - m.z + (realx - (d_rect.z - m.z))) / tsize.x;
+	} else {
+		float inner_screen_w = max(d_rect.z - m.x - m.z, 0.001);
+		float inner_tex_w    = max(tsize.x - m.x - m.z, 0.001);
+		xout = (m.x + inner_tex_w * ((realx - m.x) / inner_screen_w)) / tsize.x;
+	}
+
+	if(realy <= m.y) {
+		yout = realy / tsize.y;
+	} else if(realy >= (d_rect.w - m.w)) {
+		yout = (tsize.y - m.w + (realy - (d_rect.w - m.w))) / tsize.y;
+	} else {
+		float inner_screen_h = max(d_rect.w - m.y - m.w, 0.001);
+		float inner_tex_h    = max(tsize.y - m.y - m.w, 0.001);
+		yout = (m.y + inner_tex_h * ((realy - m.y) / inner_screen_h)) / tsize.y;
+	}
+
+	return texture(texture_sampler, vec2(xout, yout));
 }
 //layout(index = 19) subroutine(font_function_class)
 vec4 solid_color(vec2 tc) {

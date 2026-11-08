@@ -113,6 +113,7 @@ set(ALICE_ENGINE_CPP_SOURCES
     "${ALICE_SRC}/map/map_modes.cpp"
     "${ALICE_SRC}/graphics/opengl_wrapper.cpp"
     "${ALICE_SRC}/graphics/texture.cpp"
+    "${ALICE_SRC}/graphics/nine_slice_renderer.cpp"
     "${ALICE_SRC}/graphics/xac.cpp"
     "${ALICE_SRC}/graphics/stateless_render.cpp"
     "${ALICE_SRC}/graphics/asvg.cpp"
