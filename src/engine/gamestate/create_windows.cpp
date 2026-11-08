@@ -21,6 +21,10 @@
 #include "gui_map_legend.hpp"
 #include "map_tooltip.hpp"
 #include "unit_tooltip.hpp"
+#include "mobile_topbar.hpp"
+#include "mobile_dock_bar.hpp"
+#include "mobile_minimap_drawer.hpp"
+#include "mobile_province_drawer.hpp"
 
 namespace ui {
 
@@ -282,14 +286,23 @@ void create_in_game_windows(sys::state& state) {
 	{
 		auto new_elm = ui::make_element_by_type<ui::minimap_container_window>(state, "alice_menubar");
 		state.ui_state.menubar_window = new_elm.get();
+#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
+		new_elm->set_visible(state, false);
+#endif
 		state.ui_state.root->add_child_to_front(std::move(new_elm));
 	}
 	{
 		auto new_elm = ui::make_element_by_type<ui::minimap_picture_window>(state, "minimap_pic");
+#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
+		new_elm->set_visible(state, false);
+#endif
 		state.ui_state.root->add_child_to_front(std::move(new_elm));
 	}
 	{
 		auto new_elm = ui::make_element_by_type<ui::province_view_window>(state, "province_view");
+#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
+		new_elm->set_visible(state, false);
+#endif
 		state.ui_state.root->add_child_to_front(std::move(new_elm));
 	}
 	{
@@ -351,10 +364,35 @@ void create_in_game_windows(sys::state& state) {
 	}
 	{
 		auto new_elm = ui::make_element_by_type<ui::topbar_window>(state, "topbar");
+#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
+		new_elm->set_visible(state, false);
+#endif
 		new_elm->impl_on_update(state);
 		state.ui_state.root->add_child_to_front(std::move(new_elm));
 	}
 	{
+#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
+	{
+		auto mob_top = ui::create_mobile_topbar(state);
+		state.ui_state.mobile_topbar = mob_top.get();
+		state.ui_state.root->add_child_to_front(std::move(mob_top));
+	}
+	{
+		auto mob_dock = ui::create_mobile_dock_bar(state);
+		state.ui_state.mobile_dock_bar = mob_dock.get();
+		state.ui_state.root->add_child_to_front(std::move(mob_dock));
+	}
+	{
+		auto mob_map = ui::create_mobile_minimap_drawer(state);
+		state.ui_state.mobile_minimap_drawer = mob_map.get();
+		state.ui_state.root->add_child_to_front(std::move(mob_map));
+	}
+	{
+		auto mob_prov = ui::create_mobile_province_drawer(state);
+		state.ui_state.mobile_province_drawer = mob_prov.get();
+		state.ui_state.root->add_child_to_front(std::move(mob_prov));
+	}
+#endif
 		auto legend_win = ui::make_element_by_type<ui::map_legend_gradient>(state, "alice_map_legend_gradient_window");
 		state.ui_state.map_gradient_legend = legend_win.get();
 		state.ui_state.root->add_child_to_front(std::move(legend_win));

@@ -266,7 +266,11 @@ void select_national_identity_from_selected_province(sys::state& state) {
 
 void send_selected_province_to_province_window(sys::state& state) {
 	if(state.ui_state.province_window) {
+#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
+		state.set_selected_province(state.map_state.selected_province);
+#else
 		static_cast<ui::province_view_window*>(state.ui_state.province_window)->set_active_province(state, state.map_state.selected_province);
+#endif
 	}
 }
 

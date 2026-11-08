@@ -6,6 +6,8 @@
 
 namespace ui {
 
+namespace vic2_mobile = ::vic2_mobile;
+
 inline constexpr int32_t tooltip_width = 400;
 
 void state::update_timing() {

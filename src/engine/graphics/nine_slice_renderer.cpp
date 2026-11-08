@@ -5,7 +5,7 @@
 
 namespace ui {
 
-void render_nine_slice(sys::state const& state,
+void render_nine_slice(sys::state& state,
                        const slice_margins& margins,
                        float x, float y, float width, float height,
                        GLuint texture_handle,
@@ -42,6 +42,21 @@ void render_nine_slice(sys::state const& state,
     glUniform2ui(state.open_gl.ui_shader_subroutines_index_uniform, subroutines[0], subroutines[1]);
 
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+}
+
+void render_nine_slice(sys::state& state,
+                       const slice_margins& margins,
+                       float x, float y, float width, float height,
+                       dcon::gfx_object_id gfx_id,
+                       ogl::color_modification color_mod,
+                       ui::rotation r,
+                       bool flipped,
+                       bool rtl) {
+    if(!bool(gfx_id)) return;
+    auto const& gfx_def = state.ui_defs.gfx[gfx_id];
+    if(!gfx_def.primary_texture_handle) return;
+    GLuint tex = ogl::get_texture_handle(state, gfx_def.primary_texture_handle, gfx_def.is_partially_transparent());
+    render_nine_slice(state, margins, x, y, width, height, tex, color_mod, r, flipped, rtl);
 }
 
 } // namespace ui

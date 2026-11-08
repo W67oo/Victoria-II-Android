@@ -30,6 +30,11 @@ union ui_function_argument {
 
 typedef void(*ui_function)(sys::state& state, ui_function_argument arg);
 
+class mobile_topbar_window;
+class mobile_dock_bar_window;
+class mobile_minimap_drawer_window;
+class mobile_province_drawer_window;
+
 struct state {
 	element_base* under_mouse = nullptr;
 	element_base* left_mouse_hold_target = nullptr;
@@ -160,6 +165,10 @@ struct state {
 	element_base* gamerules_window = nullptr;
 
 	context_menu_window* context_menu = nullptr;
+	mobile_topbar_window* mobile_topbar = nullptr;
+	mobile_dock_bar_window* mobile_dock_bar = nullptr;
+	mobile_minimap_drawer_window* mobile_minimap_drawer = nullptr;
+	mobile_province_drawer_window* mobile_province_drawer = nullptr;
 	factory_refit_window* factory_refit_win = nullptr;
 
 	std::array<chat_message, 32> chat_messages;

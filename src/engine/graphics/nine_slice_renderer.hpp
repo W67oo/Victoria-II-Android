@@ -9,6 +9,7 @@
 
 #include "opengl_wrapper.hpp"
 #include "constants_ui.hpp"
+#include "dcon_generated_ids.hpp"
 #include <glm/glm.hpp>
 
 namespace ui {
@@ -48,10 +49,19 @@ namespace slice_presets {
 
 // Renders an arbitrary textured rectangle using 9-slice mapping.
 // Corners are preserved at 1:1 pixel scale, while borders and center are stretched.
-void render_nine_slice(sys::state const& state,
+void render_nine_slice(sys::state& state,
                        const slice_margins& margins,
                        float x, float y, float width, float height,
                        GLuint texture_handle,
+                       ogl::color_modification color_mod = ogl::color_modification::none,
+                       ui::rotation r = ui::rotation::upright,
+                       bool flipped = false,
+                       bool rtl = false);
+
+void render_nine_slice(sys::state& state,
+                       const slice_margins& margins,
+                       float x, float y, float width, float height,
+                       dcon::gfx_object_id gfx_id,
                        ogl::color_modification color_mod = ogl::color_modification::none,
                        ui::rotation r = ui::rotation::upright,
                        bool flipped = false,
