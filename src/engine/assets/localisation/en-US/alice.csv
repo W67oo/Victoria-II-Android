@@ -1490,6 +1490,8 @@ alice_cur_bimetal;Bimetal
 alice_cur_fiat;Fiat
 alice_budget_income_breakdown;Daily National Revenue Breakdown:
 alice_state_dividends_income;State Enterprise Dividends: $x$
+ipo_factory;Public IPO Listing
+delist_factory;Delist from Exchange
 alice_countryalert_colonialgood_start;You can colonize $region$
 alice_overseas_mil_description;Overseas militancy
 alice_armygroup_go_to_selection;Add/remove units

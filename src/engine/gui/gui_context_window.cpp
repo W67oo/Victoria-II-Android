@@ -339,6 +339,66 @@ public:
 	}
 };
 
+class context_menu_ipo_factory : public context_menu_entry_logic {
+public:
+	dcon::text_key get_name(sys::state& state, context_menu_context context) noexcept override {
+		return state.lookup_key("ipo_factory");
+	}
+
+	bool is_available(sys::state& state, context_menu_context context) noexcept override {
+		auto fid = context.factory;
+		if (!state.world.factory_is_valid(fid)) return false;
+		auto p = state.world.factory_get_province_from_factory_location(fid);
+		if (state.world.province_get_nation_from_province_ownership(p) != state.local_player_nation) return false;
+
+		auto quote = economy::stock_market::get_factory_quote(state, fid);
+		if (quote.is_public) return false;
+		if (quote.in_distress) return false;
+		return true;
+	}
+
+	void button_action(sys::state& state, context_menu_context context, ui::element_base* parent) noexcept override {
+		auto fid = context.factory;
+		economy::stock_market::conduct_ipo(state, fid);
+	}
+
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents, context_menu_context context) noexcept override {
+		auto box = text::open_layout_box(contents, 0);
+		text::add_to_layout_box(state, contents, box, std::string("【企业公开上市 (IPO)】\n将该工厂在国家证券交易所公开发行股票挂牌上市，吸引民间资本投资并提升估值与流动性。"));
+		text::close_layout_box(contents, box);
+	}
+};
+
+class context_menu_delist_factory : public context_menu_entry_logic {
+public:
+	dcon::text_key get_name(sys::state& state, context_menu_context context) noexcept override {
+		return state.lookup_key("delist_factory");
+	}
+
+	bool is_available(sys::state& state, context_menu_context context) noexcept override {
+		auto fid = context.factory;
+		if (!state.world.factory_is_valid(fid)) return false;
+		auto p = state.world.factory_get_province_from_factory_location(fid);
+		if (state.world.province_get_nation_from_province_ownership(p) != state.local_player_nation) return false;
+
+		auto quote = economy::stock_market::get_factory_quote(state, fid);
+		return quote.is_public;
+	}
+
+	void button_action(sys::state& state, context_menu_context context, ui::element_base* parent) noexcept override {
+		auto fid = context.factory;
+		economy::stock_market::delist_factory(state, fid);
+	}
+
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents, context_menu_context context) noexcept override {
+		auto box = text::open_layout_box(contents, 0);
+		text::add_to_layout_box(state, contents, box, std::string("【股票摘牌退市】\n将该工厂从国家证券交易所摘牌退市，停止二级市场公开交易，转为未上市企业。"));
+		text::close_layout_box(contents, box);
+	}
+};
+
+inline static context_menu_ipo_factory context_menu_ipo_factory_logic;
+inline static context_menu_delist_factory context_menu_delist_factory_logic;
 inline static context_menu_nationalize_factory context_menu_nationalize_factory_logic;
 inline static context_menu_privatize_factory context_menu_privatize_factory_logic;
 inline static context_menu_delete_factory context_menu_delete_factory_logic;
@@ -431,6 +491,8 @@ void show_context_menu(sys::state& state, context_menu_context context) {
 		logics[2] = &context_menu_delete_factory_logic;
 		logics[3] = &context_menu_nationalize_factory_logic;
 		logics[4] = &context_menu_privatize_factory_logic;
+		logics[5] = &context_menu_ipo_factory_logic;
+		logics[6] = &context_menu_delist_factory_logic;
 	}
 	else if(context.fconstruction) {
 		logics[0] = &context_menu_cancel_factory_construction_logic;
