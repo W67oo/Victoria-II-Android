@@ -146,6 +146,19 @@ void weekly_stock_market_settlement(sys::state& state) {
             }
         }
 
+        // Organic IPO: Profitable, cash-rich unlisted enterprises go public via equity underwriting
+        if (!d.is_public && !d.in_distress && d.trailing_30d_profit > 15.0f && d.cash_reserves > 200.0f) {
+            float inv_pool = state.world.nation_get_private_investment(n);
+            if (inv_pool > 500.0f) {
+                conduct_ipo(state, f);
+            }
+        }
+
+        // Chronic insolvency delisting: If cash is zero and trailing losses severe, delist from exchange
+        if (d.is_public && d.in_distress && d.cash_reserves <= 0.0f && d.trailing_30d_profit < -50.0f) {
+            delist_factory(state, f);
+        }
+
         // Secondary market portfolio investment by capitalists:
         // Capitalists invest surplus cash into healthy high-yield listed factories
         if (d.is_public && !d.in_distress && d.dividend_yield >= 0.05f) {
