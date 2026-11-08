@@ -8,6 +8,7 @@
 #include "central_bank.hpp"
 #include "stock_exchange.hpp"
 #include "dual_ownership.hpp"
+#include "gui_ledger_window.hpp"
 #include <fmt/format.h>
 #include <algorithm>
 
@@ -112,6 +113,24 @@ message_result mobile_topbar_window::impl_on_lbutton_up(sys::state& state, int32
             bool vis = state.ui_state.topbar_subwindow->is_visible();
             state.ui_state.topbar_subwindow->set_visible(state, !vis);
             if (!vis) state.ui_state.root->move_child_to_front(state.ui_state.topbar_subwindow);
+        }
+        return message_result::consumed;
+    }
+        case TopbarSection::InflationCredit: {
+        if (!state.ui_state.ledger_window) {
+            auto window = make_element_by_type<ledger_window>(state, "ledger");
+            state.ui_state.ledger_window = window.get();
+        }
+        if (state.ui_state.ledger_window) {
+            bool vis = state.ui_state.ledger_window->is_visible();
+            if (vis) {
+                state.ui_state.ledger_window->set_visible(state, false);
+            } else {
+                state.ui_state.ledger_window->set_visible(state, true);
+                state.ui_state.root->move_child_to_front(state.ui_state.ledger_window);
+                Cyto::Any payload = ledger_page_number{int8_t(13)};
+                state.ui_state.ledger_window->impl_set(state, payload);
+            }
         }
         return message_result::consumed;
     }
