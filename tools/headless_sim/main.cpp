@@ -13,6 +13,7 @@
 #include "trade_network.hpp"
 #include "nations.hpp"
 #include "simple_fs.hpp"
+#include "central_bank.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -163,6 +164,7 @@ int main(int argc, char** argv) {
     state->fill_unsaved_data();
     state->current_scene.game_in_progress = true;
     state->game_seed = 808080;
+    economy::initialize_central_banks(*state);
 
     std::cout << "\n[World Statistics]\n";
     std::cout << "  Provinces:  " << state->world.province_size() << "\n";

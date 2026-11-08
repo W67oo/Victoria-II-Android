@@ -30,6 +30,7 @@
 #include "military_templates.hpp"
 #include "nations_templates.hpp"
 #include "national_budget.hpp"
+#include "central_bank.hpp"
 
 namespace economy {
 
@@ -166,11 +167,15 @@ bool can_take_loans(sys::state& state, dcon::nation_id n) {
 
 float interest_payment(sys::state& state, dcon::nation_id n) {
 	/*
-	Every day, a nation must pay its creditors. It must pay national-modifier-to-loan-interest x debt-amount x interest-to-debt-holder-rate / 30
-	When a nation takes a loan, the interest-to-debt-holder-rate is set at nation-taking-the-loan-technology-loan-interest-modifier + define:LOAN_BASE_INTEREST, with a minimum of 0.01.
+	Phase 3 (3.4): Central banking dynamic bond yield.
+	Interest rate is governed by central bank base rate + sovereign credit rating spread.
+	Daily interest payment = debt * bond_yield / 365 (with national modifier scaling).
 	*/
 	auto debt = state.world.nation_get_local_loan(n);
-	return debt * std::max(0.01f, (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::loan_interest) + 1.0f) * state.defines.loan_base_interest) / 30.0f;
+	if (debt <= 0.0f) return 0.0f;
+	float bond_yield = economy::get_bond_yield(state, n);
+	float tech_mod = (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::loan_interest) + 1.0f);
+	return debt * std::max(0.01f, bond_yield * tech_mod) / 365.0f;
 }
 float max_loan(sys::state& state, dcon::nation_id n) {
 	/*

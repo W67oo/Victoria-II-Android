@@ -2,6 +2,7 @@
 #include "system_state.hpp"
 #include "pop_merger.hpp"
 #include "rebel_clustering.hpp"
+#include "central_bank.hpp"
 
 namespace vic2_mobile::scheduler {
 
@@ -15,8 +16,11 @@ void execute_daily_tier1(sys::state& /*state*/) {
     ++g_stats.total_daily_ticks;
 }
 
-void execute_weekly_tier2(sys::state& /*state*/, uint32_t /*day_of_week*/) {
+void execute_weekly_tier2(sys::state& state, uint32_t day_of_week) {
     ++g_stats.weekly_ticks_run;
+    if (day_of_week == 0) {
+        ::economy::update_central_banks_weekly(state);
+    }
 }
 
 void execute_monthly_tier3(sys::state& state, uint32_t day_of_month) {

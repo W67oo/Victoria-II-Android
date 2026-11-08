@@ -158,6 +158,7 @@ set(ALICE_ENGINE_CPP_SOURCES
     "${ALICE_SRC}/economy/trade_network.cpp"
     "${ALICE_SRC}/economy/demographics.cpp"
     "${ALICE_SRC}/economy/pop_merger.cpp"
+    "${ALICE_SRC}/economy/central_bank.cpp"
     "${ALICE_SRC}/culture/culture.cpp"
     "${ALICE_SRC}/culture/politics.cpp"
     "${ALICE_SRC}/culture/rebels.cpp"

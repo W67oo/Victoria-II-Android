@@ -2095,22 +2095,17 @@ dcon::nation_id get_market_leader(const sys::state& state, dcon::nation_id natio
 	if(state.world.overlord_get_ruler(overlord)) {
 		return state.world.overlord_get_ruler(overlord);
 	}
-	auto sphere = state.world.nation_get_in_sphere_of(nation);
-	if(bool(sphere)) {
-		return sphere;
-	}
+	// Phase 3 (3.3): Dual-Layer Market Structure.
+	// Colonies and puppets share overlord's customs market.
+	// Sovereign spherelings maintain their own domestic market and currency,
+	// trading with their sphere leader tariff-free via preferential bilateral trade.
 	return nation;
 }
 
 ve::tagged_vector<dcon::nation_id> get_market_leader(const sys::state& state, ve::tagged_vector<dcon::nation_id> nations) {
-	auto sphere = state.world.nation_get_in_sphere_of(nations);
-
 	auto overlord = state.world.overlord_get_ruler(state.world.nation_get_overlord_as_subject(nations));
-
-	auto has_overlord_mask = overlord != dcon::nation_id{};;
-	auto has_sphere_mask = sphere != dcon::nation_id{};
-
-	return ve::select(has_overlord_mask, overlord, ve::select(has_sphere_mask, sphere, nations));
+	auto has_overlord_mask = overlord != dcon::nation_id{};
+	return ve::select(has_overlord_mask, overlord, nations);
 }
 template<war_initiation check_alliance>
 bool would_war_conflict_with_sphere_leader(sys::state& state, dcon::nation_id sphereling, dcon::nation_id target) {
