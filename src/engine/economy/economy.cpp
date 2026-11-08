@@ -183,14 +183,20 @@ float max_loan(sys::state& state, dcon::nation_id n) {
 	/*
 	Phase 3: Modern Fractional Reserve Banking Credit Multiplier (M2 = M0 / r)
 	Base reserve requirement r = 0.20 (5x credit multiplier on deposits).
-	Borrowing limit is underpinned by taxable fiscal capacity and fractional bank credit.
+	Borrowing limit is underpinned by taxable fiscal capacity, provincial bank infrastructure, and fractional bank credit.
 	*/
 	auto mod = (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::max_loan_modifier) + 1.0f);
 	auto total_tax_base = state.world.nation_get_total_rich_income(n) + state.world.nation_get_total_middle_income(n) + state.world.nation_get_total_poor_income(n);
-	float reserve_ratio = 0.20f;
+	int32_t total_banks = 0;
+	for (auto p : state.world.nation_get_province_ownership(n)) {
+		total_banks += state.world.province_get_building_level(p.get_province(), uint8_t(economy::province_building_type::bank));
+	}
+	// Bank buildings deepen domestic credit markets: lower reserve drag (down to 10%)
+	float reserve_ratio = std::max(0.10f, 0.20f - total_banks * 0.005f);
 	auto bank_deposits = state.world.nation_get_national_bank(n);
 	float fractional_credit_pool = bank_deposits * ((1.0f - reserve_ratio) / reserve_ratio);
-	return std::max(0.0f, (total_tax_base * 2.0f + fractional_credit_pool) * mod);
+	float bank_depth_multiplier = 1.0f + std::min(0.50f, total_banks * 0.02f);
+	return std::max(0.0f, (total_tax_base * 2.0f + fractional_credit_pool) * mod * bank_depth_multiplier);
 }
 
 int32_t most_recent_price_record_index(sys::state& state, int offset_days) {

@@ -120,7 +120,13 @@ void update_central_banks_weekly(sys::state& state) {
         // 2. Sovereign Debt & Credit Rating
         float debt = state.world.nation_get_local_loan(n);
         float gdp = std::max(10.0f, economy::gdp::value_nation(state, n));
-        float debt_to_gdp = debt / gdp;
+        int32_t total_banks = 0;
+        for (auto p : state.world.nation_get_province_ownership(n)) {
+            total_banks += state.world.province_get_building_level(p.get_province(), uint8_t(economy::province_building_type::bank));
+        }
+        // Provincial bank infrastructure bolsters sovereign fiscal resilience
+        float bank_shield = 1.0f / (1.0f + std::min(0.25f, total_banks * 0.01f));
+        float debt_to_gdp = (debt / gdp) * bank_shield;
 
         if (debt_to_gdp < 0.20f) {
             cb.credit_rating = sovereign_credit_rating::AAA;
