@@ -11,6 +11,31 @@
 #include "serialization.hpp"
 #include "system_state.hpp"
 #include "user_interactions.hpp"
+#include "touch_tooltip_manager.hpp"
+#include "inspector_mode.hpp"
+
+#if defined(__ANDROID__)
+#include <SDL_system.h>
+#include <jni.h>
+
+inline void trigger_haptic(int effect_type) noexcept {
+    JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    if (!env) return;
+    jclass act_cls = env->FindClass("com/vic2mobile/app/Vic2GameActivity");
+    if (!act_cls) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return;
+    }
+    jmethodID method = env->GetStaticMethodID(act_cls, "performHapticFeedback", "(I)V");
+    if (method) {
+        env->CallStaticVoidMethod(act_cls, method, static_cast<jint>(effect_type));
+    }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    env->DeleteLocalRef(act_cls);
+}
+#else
+inline void trigger_haptic(int /*effect_type*/) noexcept {}
+#endif
 
 #include <SDL.h>
 
@@ -176,14 +201,53 @@ void dispatch_touch_command(sys::state& state, const vic2_mobile::input::TouchCo
 
     switch (cmd.type) {
     case TouchActionType::PrimaryTap: {
+        uint64_t now_ms = SDL_GetTicks64();
+
+        // 1. Check if pinned tooltip should be dismissed
+        if (vic2_mobile::ui::TouchTooltipManager::get().handle_touch_tap(cmd.x, cmd.y, now_ms)) {
+            if (state.ui_state.tooltip) {
+                state.ui_state.tooltip->set_visible(state, false);
+            }
+            state.ui_state.last_tooltip = nullptr;
+            break;
+        }
+
+        // 2. If pinned and tapped inside, unpin it
+        if (vic2_mobile::ui::TouchTooltipManager::get().is_pinned()) {
+            vic2_mobile::ui::TouchTooltipManager::get().unpin();
+            if (state.ui_state.tooltip) {
+                state.ui_state.tooltip->set_visible(state, false);
+            }
+            state.ui_state.last_tooltip = nullptr;
+            break;
+        }
+
         state.mouse_x_position = cmd.x;
         state.mouse_y_position = cmd.y;
         state.on_mouse_move(cmd.x, cmd.y, mod);
 
-        if (touch_ctrl.inspector_mode()) {
+        bool is_inspector = touch_ctrl.inspector_mode() || vic2_mobile::ui::InspectorMode::get().is_active();
+        if (is_inspector) {
             // [?] Inspector Mode: pin Tooltip at (x, y) without firing button execution
+            if (state.ui_state.tooltip && state.ui_state.tooltip->is_visible()) {
+                auto const& bounds = state.ui_state.tooltip->base_data;
+                vic2_mobile::input::SafeAreaInsets insets{};
+                {
+                    std::lock_guard<std::mutex> lk(vic2_mobile::runtime::config().mtx);
+                    insets = vic2_mobile::runtime::config().insets;
+                }
+                vic2_mobile::ui::TouchTooltipManager::get().pin(
+                    cmd.x, cmd.y, 32, 32,
+                    bounds.size.x, bounds.size.y,
+                    state.x_size, state.y_size,
+                    insets.left, insets.top, insets.right, insets.bottom,
+                    now_ms
+                );
+                trigger_haptic(1);
+            }
             break;
         }
+
         state.on_lbutton_down(cmd.x, cmd.y, mod);
         if (state.win_ptr) state.win_ptr->left_mouse_down = true;
         state.on_lbutton_up(cmd.x, cmd.y, mod);
@@ -201,6 +265,24 @@ void dispatch_touch_command(sys::state& state, const vic2_mobile::input::TouchCo
         if (!is_point_over_ui(state, cmd.x, cmd.y)) {
             state.on_rbutton_down(cmd.x, cmd.y, mod);
             state.on_rbutton_up(cmd.x, cmd.y, mod);
+            trigger_haptic(2);
+        } else {
+            if (state.ui_state.tooltip && state.ui_state.tooltip->is_visible()) {
+                auto const& bounds = state.ui_state.tooltip->base_data;
+                vic2_mobile::input::SafeAreaInsets insets{};
+                {
+                    std::lock_guard<std::mutex> lk(vic2_mobile::runtime::config().mtx);
+                    insets = vic2_mobile::runtime::config().insets;
+                }
+                vic2_mobile::ui::TouchTooltipManager::get().pin(
+                    cmd.x, cmd.y, 36, 36,
+                    bounds.size.x, bounds.size.y,
+                    state.x_size, state.y_size,
+                    insets.left, insets.top, insets.right, insets.bottom,
+                    SDL_GetTicks64()
+                );
+                trigger_haptic(1);
+            }
         }
         break;
     }

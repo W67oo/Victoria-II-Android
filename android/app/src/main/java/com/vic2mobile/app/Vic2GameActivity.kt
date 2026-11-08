@@ -2,12 +2,16 @@ package com.vic2mobile.app
 
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import org.libsdl.app.SDLActivity
+import java.lang.ref.WeakReference
 
 /**
  * Fullscreen 20:9 Landscape OpenGL ES 3.2 Game Activity powered by SDL2 + Project Alice.
@@ -33,6 +37,8 @@ class Vic2GameActivity : SDLActivity() {
         RuntimeBootstrap.ensureAliceBuiltinAssets(this)
         RuntimeBootstrap.syncRuntimePathsToNative(this)
 
+        instance = WeakReference(this)
+
         super.onCreate(savedInstanceState)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -52,6 +58,42 @@ class Vic2GameActivity : SDLActivity() {
             )
             NativeBridge.nativeSetSafeAreaInsets(insets.left, insets.top, insets.right, insets.bottom)
             windowInsets
+        }
+    }
+
+    override fun onDestroy() {
+        if (instance?.get() === this) {
+            instance = null
+        }
+        super.onDestroy()
+    }
+
+    companion object {
+        @Volatile
+        private var instance: WeakReference<Vic2GameActivity>? = null
+
+        @JvmStatic
+        fun performHapticFeedback(effectType: Int) {
+            val act = instance?.get() ?: return
+            act.runOnUiThread {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val vibrator = act.getSystemService(Vibrator::class.java)
+                        val vibrationEffect = when (effectType) {
+                            2 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+                            1 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+                            else -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                        }
+                        vibrator?.vibrate(vibrationEffect)
+                    } else {
+                        val flag = if (effectType == 2)
+                            HapticFeedbackConstants.LONG_PRESS
+                        else
+                            HapticFeedbackConstants.KEYBOARD_TAP
+                        act.window.decorView.performHapticFeedback(flag)
+                    }
+                } catch (_: Exception) {}
+            }
         }
     }
 }

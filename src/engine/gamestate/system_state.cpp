@@ -33,6 +33,7 @@
 #include "economy_production.hpp"
 #include "money.hpp"
 #include "diplomatic_messages.hpp"
+#include "tick_scheduler.hpp"
 #include "economy_constants.hpp"
 #include "alice_ui.hpp"
 #include "commands.hpp"
@@ -5270,6 +5271,7 @@ void state::single_game_tick() {
 		ai::take_ai_decisions(*this);
 
 		event::update_events(*this);
+		vic2_mobile::scheduler::execute_tiered_tick(*this);
 
 		// weekly updates
 		auto day_of_week = current_date.to_raw_value() % 7;

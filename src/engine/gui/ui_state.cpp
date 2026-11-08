@@ -2,6 +2,7 @@
 #include "gui_element_types.hpp"
 #include "system_state.hpp"
 #include "map_tooltip.hpp"
+#include "touch_tooltip_manager.hpp"
 
 namespace ui {
 
@@ -76,6 +77,7 @@ void state::set_mouse_sensitive_target(sys::state& state, element_base* target) 
 void state::update_tooltip(sys::state& state, ui::mouse_probe tooltip_probe, int32_t tooltip_sub_index, int16_t max_height) {
 	if(last_tooltip != tooltip_probe.under_mouse) return;
 	if(last_tooltip_sub_index != tooltip_sub_index) return;
+	if(vic2_mobile::ui::TouchTooltipManager::get().is_pinned()) return;
 	if(!last_tooltip) return;
 	if(!tooltip->is_visible()) return;
 
@@ -116,7 +118,8 @@ void state::update_tooltip(sys::state& state, ui::mouse_probe tooltip_probe, int
 		if(container.used_width > 0)
 			tooltip->set_visible(state, true);
 		else
-			tooltip->set_visible(state, false);
+			if(!vic2_mobile::ui::TouchTooltipManager::get().is_pinned())
+				tooltip->set_visible(state, false);
 	}
 }
 
@@ -164,12 +167,15 @@ void state::populate_tooltip(sys::state& state, ui::mouse_probe tooltip_probe, i
 				if(container.used_width > 0)
 					tooltip->set_visible(state, true);
 				else
-					tooltip->set_visible(state, false);
+					if(!vic2_mobile::ui::TouchTooltipManager::get().is_pinned())
+				tooltip->set_visible(state, false);
 			} else {
+				if(!vic2_mobile::ui::TouchTooltipManager::get().is_pinned())
 				tooltip->set_visible(state, false);
 			}
 		} else {
-			tooltip->set_visible(state, false);
+			if(!vic2_mobile::ui::TouchTooltipManager::get().is_pinned())
+				tooltip->set_visible(state, false);
 		}
 	} else if(last_tooltip && last_tooltip->has_tooltip(state) == ui::tooltip_behavior::position_sensitive_tooltip) {
 		auto container = text::create_columnar_layout(
@@ -203,11 +209,13 @@ void state::populate_tooltip(sys::state& state, ui::mouse_probe tooltip_probe, i
 		if(container.used_width > 0)
 			tooltip->set_visible(state, true);
 		else
-			tooltip->set_visible(state, false);
+			if(!vic2_mobile::ui::TouchTooltipManager::get().is_pinned())
+				tooltip->set_visible(state, false);
 	}
 }
 
 void state::reposition_tooltip(ui::urect tooltip_bounds, int16_t root_height, int16_t root_width) {
+	if(vic2_mobile::ui::TouchTooltipManager::get().is_pinned()) return;
 	if(!last_tooltip) return;
 	if(!tooltip->is_visible()) return;
 
@@ -309,7 +317,8 @@ void state::handle_map_tooltip(sys::state& state, int16_t max_height) {
 			glm::vec2{ float(state.x_size / state.user_settings.ui_scale), float(state.y_size / state.user_settings.ui_scale) };
 		screen_space::point_ui screen_pos;
 		if(!state.map_state.map_to_screen(map_pos, screen_size, state.user_settings.map_is_globe, screen_pos, { 200.f, 200.f })) {
-			tooltip->set_visible(state, false);
+			if(!vic2_mobile::ui::TouchTooltipManager::get().is_pinned())
+				tooltip->set_visible(state, false);
 		} else {
 			tooltip->base_data.position =
 				ui::xy_pair{ int16_t(screen_pos.data.x - container.used_width / 2 - 8), int16_t(screen_pos.data.y + 3.5f * state.map_state.get_zoom()) };
@@ -329,6 +338,14 @@ void state::render_tooltip(sys::state& state, bool follow_mouse, int32_t mouse_x
 	if(!tooltip->is_visible()) {
 		return;
 	}	
+
+	if(vic2_mobile::ui::TouchTooltipManager::get().is_pinned()) {
+		auto const& pin = vic2_mobile::ui::TouchTooltipManager::get().state();
+		int32_t aim_x = int32_t(pin.tooltip_x / ui_scale);
+		int32_t aim_y = int32_t(pin.tooltip_y / ui_scale);
+		tooltip->impl_render(state, aim_x, aim_y);
+		return;
+	}
 
 	if( follow_mouse) {
 		//floating by mouse
