@@ -26,6 +26,7 @@
 #include "economy_pops.hpp"
 #include "advanced_province_buildings.hpp"
 #include "logistics.hpp"
+#include "dual_ownership.hpp"
 #include "gamerules.cpp"
 #include "macrobuilder2.cpp"
 #include "logisticswindow.cpp"

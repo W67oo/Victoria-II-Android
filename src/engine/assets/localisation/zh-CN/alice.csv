@@ -1215,6 +1215,8 @@ alice_cur_gold;金本位
 alice_cur_silver;银本位
 alice_cur_bimetal;复本位
 alice_cur_fiat;信用纸币
+alice_budget_income_breakdown;国家每日财政收入细目：
+alice_state_dividends_income;国企利润分红入库: $x$
 alice_countryalert_colonialgood_start;我们可以在 $region$ 开始殖民
 alice_overseas_mil_description;海外部队
 alice_armygroup_go_to_selection;添加/删除单位

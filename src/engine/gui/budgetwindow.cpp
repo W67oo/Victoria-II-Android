@@ -37,6 +37,10 @@ struct budgetwindow_budget_header_contents_t;
 struct budgetwindow_budget_header_t;
 struct budgetwindow_main_income_amount_t : public alice_ui::template_label {
 // BEGIN main::income_amount::variables
+	ui::tooltip_behavior has_tooltip(sys::state& state) noexcept override {
+		return ui::tooltip_behavior::variable_tooltip;
+	}
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
 // END
 	void on_update(sys::state& state) noexcept override;
 };
@@ -1354,8 +1358,35 @@ void budgetwindow_main_income_amount_t::on_update(sys::state& state) noexcept {
 	total += economy::estimate_tariff_import_income(state, state.local_player_nation);
 	total += economy::estimate_tariff_export_income(state, state.local_player_nation);
 	total += economy::estimate_gold_income(state, state.local_player_nation);
+	total += economy::dual_ownership::get_daily_state_dividends(state.local_player_nation);
 	set_text(state, text::prettify_currency(total));
 // END
+}
+void budgetwindow_main_income_amount_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
+	auto n = state.local_player_nation;
+	auto tax_info = economy::explain_tax_income(state, n);
+	float diplo = economy::estimate_diplomatic_income(state, n);
+	float tariffs_imp = economy::estimate_tariff_import_income(state, n);
+	float tariffs_exp = economy::estimate_tariff_export_income(state, n);
+	float gold = economy::estimate_gold_income(state, n);
+	float st_div = economy::dual_ownership::get_daily_state_dividends(n);
+
+	text::add_line(state, contents, "alice_budget_income_breakdown");
+	text::add_line(state, contents, "budget_tax_poor", text::variable_type::x, text::fp_currency{ tax_info.poor });
+	text::add_line(state, contents, "budget_tax_middle", text::variable_type::x, text::fp_currency{ tax_info.mid });
+	text::add_line(state, contents, "budget_tax_rich", text::variable_type::x, text::fp_currency{ tax_info.rich });
+	if(tariffs_imp > 0.01f || tariffs_exp > 0.01f) {
+		text::add_line(state, contents, "alice_budget_tariffs_import", text::variable_type::x, text::fp_currency{ tariffs_imp + tariffs_exp });
+	}
+	if(gold > 0.01f) {
+		text::add_line(state, contents, "alice_budget_gold_income", text::variable_type::x, text::fp_currency{ gold });
+	}
+	if(diplo > 0.01f) {
+		text::add_line(state, contents, "alice_budget_diplo_income", text::variable_type::x, text::fp_currency{ diplo });
+	}
+	if(st_div > 0.01f) {
+		text::add_line(state, contents, "alice_state_dividends_income", text::variable_type::x, text::fp_currency{ st_div });
+	}
 }
 void budgetwindow_main_expenses_amount_t::on_update(sys::state& state) noexcept {
 	budgetwindow_main_t& main = *((budgetwindow_main_t*)(parent)); 
