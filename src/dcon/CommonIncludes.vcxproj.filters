@@ -1,0 +1,103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="docs">
+      <UniqueIdentifier>{0a7af04a-d655-48f4-8ba9-725074e16ef3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common_types.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ve_avx.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ve_avx2.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ve.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="catch.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ve_sse.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unordered_dense.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ve_avx512.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ve_sse3.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\file_format_documentation.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\getting_started.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\LICENSE.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\multithreading.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\objects_and_properties.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\overview.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\relationships.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\serialization.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\ve_documentation.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\README.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\tutorial_color.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\changes.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\queries.md">
+      <Filter>docs</Filter>
+    </None>
+    <None Include="..\tutorial_ecs.md">
+      <Filter>docs</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\iamtheecs.jpg">
+      <Filter>docs</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="common_types.cpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

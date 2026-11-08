@@ -1,0 +1,31 @@
+# Upstream cloned repositories (managed separately)
+/upstream/
+
+# Game Data Directory (PC Victoria 2 assets, keep README.md)
+/game_data/*
+!/game_data/README.md
+
+# Build & CMake artifacts
+/build/
+/build-host/
+/build-android/
+/build-cxx/
+/android/.gradle/
+/android/.cxx/
+/android/build/
+/android/app/build/
+/android/app/.cxx/
+/android/local.properties
+
+# Generated headers & caches
+*.bin
+*.apk
+*.aab
+*.keystore
+*.jks
+compile_commands.json
+
+# IDE
+.idea/
+.vscode/
+*.iml
