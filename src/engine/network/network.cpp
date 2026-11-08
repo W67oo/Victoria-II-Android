@@ -21,8 +21,12 @@
 #include <natupnp.h>
 #include <iphlpapi.h>
 #include <Mstcpip.h>
+#if !defined(VIC2_NO_MULTIPLAYER)
 #include <ip2string.h>
+#endif
+#if !defined(VIC2_NO_MULTIPLAYER)
 #include "pcp.h"
+#endif
 
 using std::format;
 #else // NIX
@@ -75,7 +79,7 @@ port_forwarder::port_forwarder() { }
 
 
 void port_forwarder::start_forwarding(uint16_t port) {
-#ifdef _WIN64
+#if defined(_WIN64) && !defined(VIC2_NO_MULTIPLAYER)
 	if(started)
 		return;
 
@@ -281,7 +285,7 @@ void port_forwarder::start_forwarding(uint16_t port) {
 }
 
 port_forwarder::~port_forwarder() {
-#ifdef _WIN64
+#if defined(_WIN64) && !defined(VIC2_NO_MULTIPLAYER)
 	if(started) {
 		internal_wait.unlock();
 		do_forwarding.join();

@@ -845,7 +845,7 @@ void update_income_artisans(sys::state& state) {
 	state.world.execute_parallel_over_province([&](auto pids) {
 		auto artisan_profit = state.world.province_get_artisan_profit(pids);
 		auto current_bank = state.world.province_get_artisan_bank(pids);
-		state.world.province_set_artisan_bank(pids, current_bank + artisan_profit);
+		state.world.province_set_artisan_bank(pids, ve::max(0.f, current_bank + artisan_profit));
 		state.world.province_set_artisan_profit(pids, 0.f);
 
 		auto new_bank = state.world.province_get_artisan_bank(pids);

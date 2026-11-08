@@ -7,18 +7,9 @@
 
 #include <cstdint>
 #include <cwchar>
-
-#ifndef UErrorCode
-typedef int32_t UErrorCode;
-#endif
-
-#ifndef UChar
-typedef uint16_t UChar;
-#endif
-
-#ifndef UBool
-typedef int8_t UBool;
-#endif
+#include "unicode/utypes.h"
+#include "unicode/ubrk.h"
+#include "unicode/ubidi.h"
 
 typedef void* UCollator;
 
@@ -51,12 +42,24 @@ inline UCollator* ucol_open(const char*, UErrorCode* err) {
 
 inline void ucol_close(UCollator*) {}
 
-inline int ucol_strcoll(UCollator*, const UChar* s1, int32_t /*len1*/, const UChar* s2, int32_t /*len2*/) {
+inline int ucol_strcoll_impl(const wchar_t* s1, const wchar_t* s2) {
     if (!s1 && !s2) return UCOL_EQUAL;
     if (!s1) return UCOL_LESS;
     if (!s2) return UCOL_GREATER;
-    int cmp = wcscmp(reinterpret_cast<const wchar_t*>(s1), reinterpret_cast<const wchar_t*>(s2));
+    int cmp = wcscmp(s1, s2);
     if (cmp < 0) return UCOL_LESS;
     if (cmp > 0) return UCOL_GREATER;
     return UCOL_EQUAL;
+}
+
+inline int ucol_strcoll(UCollator*, const char16_t* s1, int32_t /*len1*/, const char16_t* s2, int32_t /*len2*/) {
+    return ucol_strcoll_impl(reinterpret_cast<const wchar_t*>(s1), reinterpret_cast<const wchar_t*>(s2));
+}
+
+inline int ucol_strcoll(UCollator*, const uint16_t* s1, int32_t /*len1*/, const uint16_t* s2, int32_t /*len2*/) {
+    return ucol_strcoll_impl(reinterpret_cast<const wchar_t*>(s1), reinterpret_cast<const wchar_t*>(s2));
+}
+
+inline int ucol_strcoll(UCollator*, const wchar_t* s1, int32_t /*len1*/, const wchar_t* s2, int32_t /*len2*/) {
+    return ucol_strcoll_impl(s1, s2);
 }

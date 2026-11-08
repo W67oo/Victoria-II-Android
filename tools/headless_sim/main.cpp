@@ -9,6 +9,7 @@
 #include "parsers_declarations.hpp"
 #include "economy.hpp"
 #include "economy_stats.hpp"
+#include "economy_production.hpp"
 #include "trade_network.hpp"
 #include "nations.hpp"
 #include "simple_fs.hpp"
@@ -85,7 +86,7 @@ struct MonetarySnapshot {
     float global_gdp = 0.0f;
 };
 
-MonetarySnapshot take_snapshot(sys::state const& state) {
+MonetarySnapshot take_snapshot(sys::state& state) {
     MonetarySnapshot snap;
     state.world.for_each_nation([&](dcon::nation_id n) {
         auto m = economy::breakdown_nation_monetary_structure(state, n);
@@ -154,6 +155,7 @@ int main(int argc, char** argv) {
 
         std::cout << "[Init] Writing cached scenario to " << opts.scenario_file << " ...\n";
         sys::write_scenario_file(*state, native_scenario_path, 1);
+        state->on_scenario_load();
     } else {
         std::cout << "[Init] Cached scenario loaded successfully.\n";
     }
@@ -205,6 +207,19 @@ int main(int argc, char** argv) {
 
         // Run single daily simulation tick
         state->single_game_tick();
+
+        // Track endogenous bullion monetization (M0 injection from gold/silver RGOs)
+        double daily_minted = 0.0;
+        state->world.for_each_commodity([&](dcon::commodity_id c) {
+            if (state->world.commodity_get_rgo_amount(c) < 0.f || !state->world.commodity_get_money_rgo(c)) return;
+            state->world.for_each_province([&](auto province) {
+                auto controller = state->world.province_get_nation_from_province_control(province);
+                if (!controller) return;
+                auto produced = state->world.province_get_rgo_output(province, c);
+                daily_minted += produced * state->defines.gold_to_cash_rate * state->world.commodity_get_cost(c);
+            });
+        });
+        minted_accumulator += daily_minted;
 
         auto t1 = std::chrono::high_resolution_clock::now();
         double tick_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

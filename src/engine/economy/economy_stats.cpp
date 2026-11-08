@@ -1003,6 +1003,20 @@ int32_t province_factory_count(sys::state const& state, dcon::province_id pid) {
 	//assert(num_factories <= int32_t(state.defines.factories_per_state));
 	return num_factories;
 }
+
+int32_t province_factory_slot_limit(sys::state const& state, dcon::province_id pid) {
+	auto urbanisation = state.world.province_get_advanced_province_building_max_private_size(
+		pid, advanced_province_buildings::list::local_cities_and_towns);
+	int32_t base_limit = int32_t(state.defines.factories_per_state * urbanisation / economy::factories_per_state_required_city_size);
+	if (base_limit < 1) base_limit = 1;
+
+	// Dynamic bonus: +1 factory slot per level of railroad infrastructure (0~6)
+	int32_t rails_lvl = state.world.province_get_building_level(pid, uint8_t(economy::province_building_type::railroad));
+	int32_t total_limit = base_limit + rails_lvl;
+
+	// Mobile-safe bounds [1, 16]
+	return std::clamp(total_limit, 1, 16);
+}
 // Returns sum of all factory levels in a province
 float province_factory_level(sys::state const& state, dcon::province_id pid) {
 	float factory_size = 0;

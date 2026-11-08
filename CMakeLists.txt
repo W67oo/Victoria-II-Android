@@ -472,6 +472,8 @@ else() # Host Windows build -> vic2_headless_sim executable
     )
 
     target_compile_options(vic2_headless_sim PRIVATE
+        -msse4.2
+        -mpopcnt
         -Wall
         -Wno-unused-parameter
         -Wno-unused-variable
@@ -488,6 +490,7 @@ else() # Host Windows build -> vic2_headless_sim executable
         -ffp-model=precise
         -ffp-contract=off
         $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+        "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include \"${CMAKE_SOURCE_DIR}/tools/headless_sim/include/libcxx_charconv_compat.hpp\">"
         $<$<CONFIG:Release>:-O3 -DNDEBUG>
         $<$<CONFIG:RelWithDebInfo>:-O2 -g -DNDEBUG>
     )
@@ -495,6 +498,7 @@ else() # Host Windows build -> vic2_headless_sim executable
     target_include_directories(vic2_headless_sim PRIVATE
         "${CMAKE_SOURCE_DIR}/tools/headless_sim/include"
         "${CMAKE_SOURCE_DIR}/tools/headless_sim/include/unicode"
+        "${CMAKE_SOURCE_DIR}/src/platform_android"
         ${ALICE_ENGINE_INCLUDES}
     )
 

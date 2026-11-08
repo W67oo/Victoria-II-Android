@@ -11,9 +11,10 @@
 #include <cstdint>
 #include <chrono>
 
+#include "system_state.hpp"
 #include "icu.h"
 #include "simple_fs_win.cpp"
-#include "icu_ubrk_ubidi_android.cpp"
+#include "../../src/platform_android/icu_ubrk_ubidi_android.cpp"
 
 #include "window.hpp"
 #include "sound.hpp"
@@ -48,13 +49,21 @@ int32_t double_click_ms() { return 300; }
 void release_text_services_object(text_services_object*) {}
 
 void emit_error_message(std::string const& content, bool fatal) {
-    std::cerr << "[HEADLESS SIM " << (fatal ? "FATAL" : "WARN") << "] " << content << std::endl;
+    if (fatal) {
+        std::cerr << "[FATAL] " << content << std::endl;
+    } else {
+        std::cerr << "[WARN]  " << content << std::endl;
+    }
+}
+
+void emit_error_message(std::string_view content, bool fatal) {
+    emit_error_message(std::string(content), fatal);
 }
 
 } // namespace window
 
 // -----------------------------------------------------------------------------
-// Audio / Sound Stubs
+// Sound Engine Stubs
 // -----------------------------------------------------------------------------
 namespace sound {
 
@@ -65,15 +74,6 @@ void audio_instance::resume() const {}
 void audio_instance::stop() const {}
 bool audio_instance::is_playing() const { return false; }
 void audio_instance::change_volume(float) const {}
-
-sound_impl::sound_impl() = default;
-sound_impl::~sound_impl() = default;
-void sound_impl::play_effect(audio_instance&, float) {}
-void sound_impl::play_interface_sound(audio_instance&, float) {}
-void sound_impl::play_music(int32_t, float) {}
-void sound_impl::play_new_track(sys::state&) {}
-void sound_impl::play_next_track(sys::state&) {}
-void sound_impl::play_previous_track(sys::state&) {}
 
 void initialize_sound_system(sys::state&) {}
 void change_effect_volume(sys::state&, float) {}
@@ -89,53 +89,61 @@ void update_music_track(sys::state&) {}
 void play_new_track(sys::state&) {}
 void play_next_track(sys::state&) {}
 void play_previous_track(sys::state&) {}
-native_string get_current_track_name(sys::state&) { return NATIVE(""); }
+native_string get_current_track_name(sys::state&) { return native_string(); }
 
-static audio_instance dummy_audio;
-audio_instance& get_click_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_click_left_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_click_right_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_budget_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_hover_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_checkbox_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_enact_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_subtab_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_delete_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_autochoose_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_politics_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_diplomacy_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_military_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_population_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_production_sound(sys::state&) { return dummy_audio; }
-audio_instance& get_tab_technology_sound(sys::state&) { return dummy_audio; }
+static audio_instance s_dummy_audio;
+audio_instance& get_click_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_click_left_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_click_right_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_budget_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_hover_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_checkbox_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_enact_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_subtab_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_delete_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_autochoose_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_politics_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_diplomacy_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_military_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_population_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_production_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_tab_technology_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_army_select_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_army_move_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_navy_select_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_navy_move_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_error_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_peace_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_army_built_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_navy_built_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_declaration_of_war_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_technology_finished_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_factory_built_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_election_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_revolt_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_fort_built_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_railroad_built_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_naval_base_built_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_minor_event_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_major_event_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_decline_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_accept_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_diplomatic_request_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_chat_message_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_console_open_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_console_close_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_event_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_decision_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_pause_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_unpause_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_enemycapitulated_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_wecapitulated_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_random_land_battle_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_random_naval_battle_sound(sys::state&) { return s_dummy_audio; }
+audio_instance& get_random_province_select_sound(sys::state&) { return s_dummy_audio; }
 
 } // namespace sound
 
-// -----------------------------------------------------------------------------
-// OpenGL Stubs
-// -----------------------------------------------------------------------------
 namespace ogl {
-
 void create_opengl_context(sys::state&) {}
-void shutdown_opengl(sys::state&) {}
-void initialize_msaa(sys::state&, int32_t, int32_t) {}
-void deinitialize_msaa(sys::state&) {}
-void initialize_framebuffer_for_province_indices(sys::state&, int32_t, int32_t) {}
-void deinitialize_framebuffer_for_province_indices(sys::state&) {}
-
 } // namespace ogl
-
-// Minimal OpenGL API symbols referenced by system_state.cpp:
-extern "C" {
-void glGenQueries(GLsizei, GLuint*) {}
-void glBeginQuery(GLenum, GLuint) {}
-void glEndQuery(GLenum) {}
-void glGetQueryObjectuiv(GLuint, GLenum, GLuint*) {}
-void glClearColor(GLfloat, GLfloat, GLfloat, GLfloat) {}
-void glClear(GLbitfield) {}
-void glEnable(GLenum) {}
-void glDisable(GLenum) {}
-void glBlendFunc(GLenum, GLenum) {}
-void glUseProgram(GLuint) {}
-void glDeleteQueries(GLsizei, const GLuint*) {}
-}

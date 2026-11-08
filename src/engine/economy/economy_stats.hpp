@@ -398,6 +398,7 @@ trade_volume_data_detailed import_volume_detailed(
 int32_t state_factory_count(sys::state const& state, dcon::state_instance_id sid, dcon::nation_id n);
 float state_factory_level(sys::state const& state, dcon::state_instance_id sid, dcon::nation_id n);
 int32_t province_factory_count(sys::state const& state, dcon::province_id sid);
+int32_t province_factory_slot_limit(sys::state const& state, dcon::province_id sid);
 float province_factory_level(sys::state const& state, dcon::province_id sid);
 
 float get_factory_level(sys::state const& state, dcon::factory_id f);

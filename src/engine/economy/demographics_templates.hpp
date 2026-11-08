@@ -85,6 +85,7 @@ float get_single_promotion_demotion_target_weight(sys::state& state, dcon::pop_i
 	} else if((PROMOTION_TYPE == promotion_type::promotion && state.world.pop_type_get_strata(target_type) >= strata) //if the selected type is higher strata
 		|| (PROMOTION_TYPE == promotion_type::demotion && state.world.pop_type_get_strata(target_type) <= strata)) {   //if the selected type is lower strata
 
+#ifndef DO_NOT_USE_LLVM
 		if(auto mfn = state.world.pop_type_get_promotion_fns(ptype, target_type); mfn != 0) {
 			using ftype = float(*)(int32_t);
 			ftype fn = (ftype)mfn;
@@ -98,7 +99,9 @@ float get_single_promotion_demotion_target_weight(sys::state& state, dcon::pop_i
 #endif
 			auto chance = std::max(0.0f, llvm_result + (target_type == promoted_type ? promotion_bonus : 0.0f));
 			return chance;
-		} else {
+		} else
+#endif
+		{
 			if(auto mtrigger = state.world.pop_type_get_promotion(ptype, target_type); mtrigger) {
 				auto chance = std::max(0.0f, trigger::evaluate_additive_modifier(state, mtrigger, trigger::to_generic(p), trigger::to_generic(p), 0) + (target_type == promoted_type ? promotion_bonus : 0.0f));
 				return chance;
@@ -172,6 +175,7 @@ pop_promotion_demotion_data get_promotion_demotion_data(sys::state& state, dcon:
 		|| (PROMOTION_TYPE == promotion_type::demotion && promoted_type && state.world.pop_type_get_strata(promoted_type) <= strata)) {
 
 		float chance = 0.0f;
+#ifndef DO_NOT_USE_LLVM
 		if(auto mfn = state.world.pop_type_get_promotion_fns(ptype, promoted_type); mfn != 0) {
 			using ftype = float(*)(int32_t);
 			ftype fn = (ftype)mfn;
@@ -184,7 +188,9 @@ pop_promotion_demotion_data get_promotion_demotion_data(sys::state& state, dcon:
 			assert(llvm_result == interp_result);
 #endif
 			chance = llvm_result + promotion_bonus;
-		} else {
+		} else
+#endif
+		{
 			if(auto mtrigger = state.world.pop_type_get_promotion(ptype, promoted_type); mtrigger) {
 				chance = trigger::evaluate_additive_modifier(state, mtrigger, trigger::to_generic(p), trigger::to_generic(p), 0) + promotion_bonus;
 			}

@@ -63,10 +63,22 @@ namespace dcon {
 	inline void bit_vector_set(bitfield_type* v, int32_t index, bool value) {
 		const int32_t real_index = index >> 3;
 		const uint32_t sub_index = uint32_t(index) & uint32_t(7);
+#if defined(__cpp_lib_atomic_ref)
 		if(value)
 			std::atomic_ref(v[real_index].v).fetch_or(uint8_t(uint32_t(1) << sub_index));
 		else
 			std::atomic_ref(v[real_index].v).fetch_and(uint8_t(~(uint32_t(1) << sub_index)));
+#elif defined(_MSC_VER)
+		if(value)
+			std::atomic_ref(v[real_index].v).fetch_or(uint8_t(uint32_t(1) << sub_index));
+		else
+			std::atomic_ref(v[real_index].v).fetch_and(uint8_t(~(uint32_t(1) << sub_index)));
+#else
+		if(value)
+			__atomic_fetch_or(&v[real_index].v, uint8_t(uint32_t(1) << sub_index), __ATOMIC_SEQ_CST);
+		else
+			__atomic_fetch_and(&v[real_index].v, uint8_t(~(uint32_t(1) << sub_index)), __ATOMIC_SEQ_CST);
+#endif
 	}
 
 	inline bool bit_vector_test(bitfield_type const* v, int32_t index) {

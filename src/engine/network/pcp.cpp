@@ -1,4 +1,4 @@
-#ifdef _WIN64
+#if defined(_WIN64) && !defined(VIC2_NO_MULTIPLAYER)
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN

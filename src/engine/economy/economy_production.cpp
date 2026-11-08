@@ -2125,7 +2125,7 @@ void update_employment(sys::state& state, bool ignore_reality, float presim_empl
 			// we don't want wages to rise way too high relatively to profits
 			// as we do not have actual budgets, we  consider that our workers budget is as follows
 			new_employment = ve::min(
-				rgo_profit_to_wage_bound * output_per_worker * current_price * current_size // budget
+				rgo_profit_to_wage_bound * output_per_worker * current_price * sales_expected_rate * current_size // budget
 				/ wage_per_worker,
 				new_employment
 			);

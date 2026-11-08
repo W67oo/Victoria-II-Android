@@ -174,11 +174,16 @@ float interest_payment(sys::state& state, dcon::nation_id n) {
 }
 float max_loan(sys::state& state, dcon::nation_id n) {
 	/*
-	There is an income cap to how much may be borrowed, namely: define:MAX_LOAN_CAP_FROM_BANKS x (national-modifier-to-max-loan-amount + 1) x national-tax-base.
+	Phase 3: Modern Fractional Reserve Banking Credit Multiplier (M2 = M0 / r)
+	Base reserve requirement r = 0.20 (5x credit multiplier on deposits).
+	Borrowing limit is underpinned by taxable fiscal capacity and fractional bank credit.
 	*/
 	auto mod = (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::max_loan_modifier) + 1.0f);
 	auto total_tax_base = state.world.nation_get_total_rich_income(n) + state.world.nation_get_total_middle_income(n) + state.world.nation_get_total_poor_income(n);
-	return std::max(0.0f, (total_tax_base + state.world.nation_get_national_bank(n)) * mod);
+	float reserve_ratio = 0.20f;
+	auto bank_deposits = state.world.nation_get_national_bank(n);
+	float fractional_credit_pool = bank_deposits * ((1.0f - reserve_ratio) / reserve_ratio);
+	return std::max(0.0f, (total_tax_base * 2.0f + fractional_credit_pool) * mod);
 }
 
 int32_t most_recent_price_record_index(sys::state& state, int offset_days) {
@@ -1478,11 +1483,8 @@ void initialize(sys::state& state) {
 				}
 			});
 
-			// add a trickle of money rgo everywhere to produce a source of inflation
-			state.world.province_set_rgo_size(p, economy::money, state.world.province_get_rgo_size(p, economy::money) + 2500.f);
-			state.world.province_set_rgo_potential(p, economy::money, state.world.province_get_rgo_size(p, economy::money) + 5000.f);
-			state.world.province_set_rgo_efficiency(p, economy::money, 1.f);
-			state.world.province_set_rgo_max_efficiency(p, economy::money, 1.f);
+			// Phase 3: Removed Project Alice artificial money RGO trickle everywhere.
+			// Natural gold/silver bullion monetization from real mining RGOs handles endogenous M0 injection.
 		});
 	}
 
@@ -2489,9 +2491,7 @@ std::vector<full_construction_factory> estimate_private_investment_construct(sys
 			continue; // already building
 
 		int32_t num_factories = province_factory_count(state, s);
-		auto urbanisation = state.world.province_get_advanced_province_building_max_private_size(s, advanced_province_buildings::list::local_cities_and_towns);
-
-		if(num_factories >= int32_t(state.defines.factories_per_state * urbanisation / economy::factories_per_state_required_city_size)) {
+		if(num_factories >= economy::province_factory_slot_limit(state, s)) {
 			continue;
 		}
 
@@ -5444,7 +5444,7 @@ void daily_update(sys::state& state, bool presimulation, float presimulation_sta
 		{
 			auto total_rgo_profit = state.world.province_get_rgo_profit(pid);
 			auto current_bank = state.world.province_get_rgo_bank(pid);
-			state.world.province_set_rgo_bank(pid, current_bank + total_rgo_profit);
+			state.world.province_set_rgo_bank(pid, std::max(0.0f, current_bank + total_rgo_profit));
 		}
 	});
 
@@ -5749,12 +5749,27 @@ void daily_update(sys::state& state, bool presimulation, float presimulation_sta
 				next_price = current_price + price_properties::commodity::change_fast<ve::fp_vector>(current_price, supply, demand) / (1.f + 100.f * presimulation_stage) ;				
 				next_price = ve::select(demand <= supply, next_price * (demand + 0.000'001f) / (supply + 0.000'002f), next_price);
 			} else {
-				next_price = current_price + price_properties::commodity::change<ve::fp_vector>(current_price, supply, demand);
+				auto raw_delta = price_properties::commodity::change<ve::fp_vector>(current_price, supply, demand);
+				// Phase 3: Macroeconomic Price Soft Clamping [-90%, +120%] relative to base cost with progressive elasticity damping
+				float base_cost = state.world.commodity_get_cost(cid);
+				if (base_cost <= 0.001f) base_cost = 1.0f;
+				float min_p = std::max(0.01f, base_cost * 0.10f); // -90% soft floor
+				float max_p = std::max(min_p * 2.0f, base_cost * 2.20f); // +120% soft ceiling
+				
+				// Progressive damping resistance:
+				auto damp_up = ve::max(ve::fp_vector{0.05f}, (max_p - current_price) / (max_p - min_p + 0.0001f));
+				auto damp_down = ve::max(ve::fp_vector{0.05f}, (current_price - min_p) / (max_p - min_p + 0.0001f));
+				auto effective_delta = ve::select(raw_delta >= 0.0f, raw_delta * ve::min(ve::fp_vector{1.0f}, damp_up), raw_delta * ve::min(ve::fp_vector{1.0f}, damp_down));
+				next_price = current_price + effective_delta;
 			}
 #ifndef NDEBUG
 			ve::apply([&](auto value) { assert(std::isfinite(value)); }, next_price);
 #endif
-			auto next_price_clamped = ve::min(ve::max(next_price, price_properties::commodity::min), price_properties::commodity::max);
+			float base_cost_clamp = state.world.commodity_get_cost(cid);
+			if (base_cost_clamp <= 0.001f) base_cost_clamp = 1.0f;
+			float min_bound = std::max(0.01f, base_cost_clamp * 0.10f);
+			float max_bound = std::max(min_bound * 2.0f, base_cost_clamp * 2.20f);
+			auto next_price_clamped = ve::min(ve::max(next_price, min_bound), max_bound);
 
 			auto current_confidence = state.world.market_get_price_confidence(ids, cid);
 			auto price_ratio = current_price / next_price_clamped;

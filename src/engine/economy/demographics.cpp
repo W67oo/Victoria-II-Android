@@ -2438,6 +2438,7 @@ void update_ideologies(sys::state& state, uint32_t offset, uint32_t divisions, i
 					auto amount = ve::max(ve::fp_vector{}, ve::apply(
 						[&](dcon::pop_id pid, dcon::pop_type_id ptid, dcon::nation_id o) {
 							if(state.world.nation_get_is_civilized(o)) {
+#ifndef DO_NOT_USE_LLVM
 								if(auto mfn = state.world.pop_type_get_ideology_fns(ptid, i); mfn != 0) {
 									using ftype = float(*)(int32_t);
 									ftype fn = (ftype)mfn;
@@ -2450,7 +2451,9 @@ void update_ideologies(sys::state& state, uint32_t offset, uint32_t divisions, i
 									assert(llvm_result == interp_result);
 #endif
 									return llvm_result;
-								} else {
+								} else
+#endif
+								{
 									auto ptrigger = state.world.pop_type_get_ideology(ptid, i);
 									return ptrigger ? trigger::evaluate_multiplicative_modifier(state, ptrigger, trigger::to_generic(pid), trigger::to_generic(pid), 0) : 0.0f;
 								}
@@ -2464,6 +2467,7 @@ void update_ideologies(sys::state& state, uint32_t offset, uint32_t divisions, i
 				} else {
 					auto amount = ve::max(ve::fp_vector{}, ve::apply(
 						[&](dcon::pop_id pid, dcon::pop_type_id ptid, dcon::nation_id o) {
+#ifndef DO_NOT_USE_LLVM
 							if(auto mfn = state.world.pop_type_get_ideology_fns(ptid, i); mfn != 0) {
 								using ftype = float(*)(int32_t);
 								ftype fn = (ftype)mfn;
@@ -2476,7 +2480,9 @@ void update_ideologies(sys::state& state, uint32_t offset, uint32_t divisions, i
 								assert(llvm_result == interp_result);
 #endif
 								return llvm_result;
-							} else {
+							} else
+#endif
+							{
 								auto ptrigger = state.world.pop_type_get_ideology(ptid, i);
 								return ptrigger ? trigger::evaluate_multiplicative_modifier(state, ptrigger, trigger::to_generic(pid), trigger::to_generic(pid), 0) : 0.0f;
 							}
@@ -2593,6 +2599,7 @@ void update_issues(sys::state& state, uint32_t offset, uint32_t divisions, issue
 
 			auto amount = ve::max(ve::fp_vector{}, owner_modifier * ve::select(allowed_by_owner,
 				ve::apply([&](dcon::pop_id pid, dcon::pop_type_id ptid, dcon::nation_id o) {
+#ifndef DO_NOT_USE_LLVM
 					if(auto mfn = state.world.pop_type_get_issues_fns(ptid, iid); mfn != 0) {
 						using ftype = float(*)(int32_t);
 						ftype fn = (ftype)mfn;
@@ -2605,7 +2612,9 @@ void update_issues(sys::state& state, uint32_t offset, uint32_t divisions, issue
 						assert(llvm_result == interp_result);
 #endif
 						return llvm_result;
-					} else { 
+					} else
+#endif
+					{ 
 						if(auto mtrigger = state.world.pop_type_get_issues(ptid, iid); mtrigger) {
 							return trigger::evaluate_multiplicative_modifier(state, mtrigger, trigger::to_generic(pid), trigger::to_generic(pid), 0);
 						} else {
