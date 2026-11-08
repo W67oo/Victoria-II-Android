@@ -8428,6 +8428,18 @@ bool can_change_factory_state_ownership(sys::state& state, dcon::nation_id sourc
 		if (pool <= 50.0f) return false;
 		return true;
 	}
+	if (mode == 4) { // IPO listing
+		auto quote = economy::stock_market::get_factory_quote(state, f);
+		if (quote.is_public) return false;
+		if (!state.world.nation_get_is_civilized(source)) return false;
+		if (state.world.nation_get_private_investment(source) < 20.0f) return false;
+		return true;
+	}
+	if (mode == 5) { // Delist
+		auto quote = economy::stock_market::get_factory_quote(state, f);
+		if (!quote.is_public) return false;
+		return true;
+	}
 	if (mode == 0) {
 		if (target_share < 0.0f || target_share > 1.0f) return false;
 		return true;
@@ -8442,6 +8454,10 @@ void execute_change_factory_state_ownership(sys::state& state, dcon::nation_id s
 		economy::dual_ownership::nationalize_factory(state, f, economy::dual_ownership::nationalization_mode::confiscation);
 	} else if (mode == 3) {
 		economy::dual_ownership::privatize_factory(state, f);
+	} else if (mode == 4) {
+		economy::stock_market::conduct_ipo(state, f);
+	} else if (mode == 5) {
+		economy::stock_market::delist_factory(state, f);
 	} else if (mode == 0) {
 		economy::dual_ownership::set_factory_state_ownership(state, f, target_share);
 	}
