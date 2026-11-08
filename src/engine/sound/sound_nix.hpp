@@ -27,6 +27,7 @@ public:
 
 	ma_engine engine;
 	bool global_pause = false;
+	bool sound_enabled = true;
 
 	audio_instance click_sound;
 	audio_instance click_left_sound;

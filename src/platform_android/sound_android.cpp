@@ -30,21 +30,28 @@ namespace sound {
 
 sound_impl::sound_impl() {
 	if(ma_engine_init(NULL, &engine) != MA_SUCCESS) {
-		std::abort(); //TODO: This shouldn't be a cause for abort
+		__android_log_print(ANDROID_LOG_WARN, "AliceSound", "ma_engine_init failed: sound will be disabled gracefully");
+		sound_enabled = false;
+	} else {
+		sound_enabled = true;
 	}
 }
 
 sound_impl::~sound_impl() {
-	ma_engine_uninit(&engine);
+	if(sound_enabled) {
+		ma_engine_uninit(&engine);
+	}
 }
 
 void sound_impl::set_volume(std::optional<ma_sound>& sound, float volume) {
+	if(!sound_enabled) return;
 	if(sound.has_value()) {
 		ma_sound_set_volume(&*sound, volume);
 	}
 }
 
 void sound_impl::override_sound(std::optional<ma_sound>& sound, audio_instance& s, float volume) {
+	if(!sound_enabled) return;
 	if(sound.has_value()) {
 		ma_sound_uninit(&*sound);
 	}
