@@ -139,6 +139,8 @@ enum class command_type : uint8_t {
 		change_building_construction_consumption_setting = 128,
 		set_supply_priority_for_armies_in_battle = 129,
 		set_supply_priority_for_navies_in_battle = 130,
+		change_factory_state_ownership = 131,
+		change_central_bank_policy = 132,
 		// network
 		notify_player_timeout = 233,// Sent to every client in the lobby to notify a client has timed out. Is also sent to the timed-out client socket, incase they get can receive it.
 		notify_oos_gamestate = 234, // sent from Client to Host, with the clients OOS gamestate for the host to compare, and generate report from. NOT SAFE for use to untrusted clients as there is no safety in seralizing the binary blob which the client sends.
@@ -584,6 +586,17 @@ struct stop_navy_movement_data {
 struct command_units_data {
 	dcon::nation_id target;
 };
+struct factory_ownership_data {
+	dcon::factory_id factory;
+	uint8_t mode;
+	float target_share;
+};
+
+struct central_bank_policy_data {
+	float base_interest_rate;
+	uint8_t standard_mode;
+};
+
 struct change_gamerule_setting_data {
 	dcon::gamerule_id gamerule;
 	uint8_t setting;
@@ -784,6 +797,8 @@ constexpr enum_array<command_type, command_handler> command_type_handlers = {
 	{ command_type::change_building_construction_consumption_setting ,command_handler{ sizeof(command::change_logistics_setting_data), sizeof(command::change_logistics_setting_data), &command_handler::true_is_host_receive_command, &command_handler::true_is_host_broadcast_command } },
 	{ command_type::set_supply_priority_for_armies_in_battle ,command_handler{ sizeof(command::set_supply_priority_for_units_in_battle_data), sizeof(command::set_supply_priority_for_units_in_battle_data), &command_handler::true_is_host_receive_command, &command_handler::true_is_host_broadcast_command } },
 	{ command_type::set_supply_priority_for_navies_in_battle ,command_handler{ sizeof(command::set_supply_priority_for_units_in_battle_data), sizeof(command::set_supply_priority_for_units_in_battle_data), &command_handler::true_is_host_receive_command, &command_handler::true_is_host_broadcast_command } },
+	{ command_type::change_factory_state_ownership, command_handler{ sizeof(command::factory_ownership_data), sizeof(command::factory_ownership_data), &command_handler::true_is_host_receive_command, &command_handler::true_is_host_broadcast_command } },
+	{ command_type::change_central_bank_policy, command_handler{ sizeof(command::central_bank_policy_data), sizeof(command::central_bank_policy_data), &command_handler::true_is_host_receive_command, &command_handler::true_is_host_broadcast_command } },
 	// network
 	{ command_type::notify_oos_gamestate, command_handler{ sizeof(command::notify_oos_gamestate_data), sizeof(command::notify_oos_gamestate_data) + max_mp_state_size, &notify_oos_gamestate_is_host_receive_command, &command_handler::false_is_host_broadcast_command   } },
 	{ command_type::notify_player_ban, command_handler{ sizeof(command::notify_player_ban_data), sizeof(command::notify_player_ban_data), &command_handler::false_is_host_receive_command, &command_handler::true_is_host_broadcast_command } },
@@ -1302,6 +1317,14 @@ void execute_network_inactivity_ping(sys::state& state, dcon::nation_id source, 
 
 
 
+
+void change_factory_state_ownership(sys::state& state, dcon::nation_id source, dcon::factory_id f, uint8_t mode, float target_share);
+bool can_change_factory_state_ownership(sys::state& state, dcon::nation_id source, dcon::factory_id f, uint8_t mode, float target_share);
+void execute_change_factory_state_ownership(sys::state& state, dcon::nation_id source, dcon::factory_id f, uint8_t mode, float target_share);
+
+void change_central_bank_policy(sys::state& state, dcon::nation_id source, float base_interest_rate, uint8_t standard_mode);
+bool can_change_central_bank_policy(sys::state& state, dcon::nation_id source, float base_interest_rate, uint8_t standard_mode);
+void execute_change_central_bank_policy(sys::state& state, dcon::nation_id source, float base_interest_rate, uint8_t standard_mode);
 
 } // namespace command
 

@@ -1,4 +1,7 @@
 #include "commands.hpp"
+#include "dual_ownership.hpp"
+#include "central_bank.hpp"
+#include "stock_exchange.hpp"
 #include "demographics.hpp"
 #include "economy_templates.hpp"
 #include "economy_stats.hpp"
@@ -7440,6 +7443,16 @@ bool can_perform_command(sys::state& state, command_data& c) {
 	{
 		return can_set_navy_supply_priority(state, source, c);
 	}
+	case command_type::change_factory_state_ownership:
+	{
+		auto& data = c.get_payload<command::factory_ownership_data>();
+		return can_change_factory_state_ownership(state, source, data.factory, data.mode, data.target_share);
+	}
+	case command_type::change_central_bank_policy:
+	{
+		auto& data = c.get_payload<command::central_bank_policy_data>();
+		return can_change_central_bank_policy(state, source, data.base_interest_rate, data.standard_mode);
+	}
 	}
 	return false;
 }
@@ -8309,6 +8322,18 @@ void execute_command(sys::state& state, command_data& c) {
 		execute_set_supply_priority_for_navies_in_battle(state, source_nation, c);
 		break;
 	}
+	case command_type::change_factory_state_ownership:
+	{
+		auto& data = c.get_payload<command::factory_ownership_data>();
+		execute_change_factory_state_ownership(state, source_nation, data.factory, data.mode, data.target_share);
+		break;
+	}
+	case command_type::change_central_bank_policy:
+	{
+		auto& data = c.get_payload<command::central_bank_policy_data>();
+		execute_change_central_bank_policy(state, source_nation, data.base_interest_rate, data.standard_mode);
+		break;
+	}
 	}
 	state.tick_end_counter.fetch_add(1, std::memory_order::seq_cst);
 }
@@ -8363,6 +8388,89 @@ void execute_pending_commands(sys::state& state) {
 		nations::update_cached_values(state);
 		state.game_state_updated.store(true, std::memory_order::release);
 	}
+}
+
+void change_factory_state_ownership(sys::state& state, dcon::nation_id source, dcon::factory_id f, uint8_t mode, float target_share) {
+	command_data p{ command_type::change_factory_state_ownership, state.local_player_id };
+	auto data = factory_ownership_data{ f, mode, target_share };
+	p << data;
+	add_to_command_queue(state, p);
+}
+
+bool can_change_factory_state_ownership(sys::state& state, dcon::nation_id source, dcon::factory_id f, uint8_t mode, float target_share) {
+	if (!state.current_scene.game_in_progress) return false;
+	if (!state.world.factory_is_valid(f)) return false;
+	auto loc = state.world.factory_get_province_from_factory_location(f);
+	if (!loc || state.world.province_get_nation_from_province_ownership(loc) != source) return false;
+
+	auto rules = state.world.nation_get_combined_issue_rules(source);
+	float current_share = economy::dual_ownership::get_factory_state_ownership(state, f);
+
+	if (mode == 1 || mode == 2) {
+		if (current_share >= 0.999f) return false;
+		bool is_laissez_faire = ((rules & issue_rule::build_factory) == 0 && (rules & issue_rule::can_subsidise) == 0);
+		if (is_laissez_faire) {
+			auto quote = economy::stock_market::get_factory_quote(state, f);
+			if (!quote.in_distress) return false;
+		}
+		if (mode == 1) {
+			float factory_size = state.world.factory_get_size(f);
+			float est_cost = std::max(500.0f, factory_size * 1000.0f * (1.0f - current_share));
+			if (state.world.nation_get_treasury(source) < est_cost) return false;
+		}
+		return true;
+	}
+	if (mode == 3) {
+		if (current_share <= 0.001f) return false;
+		bool is_planned = ((rules & issue_rule::build_factory) != 0 && (rules & issue_rule::pop_build_factory) == 0);
+		if (is_planned) return false;
+		float pool = state.world.nation_get_private_investment(source);
+		if (pool <= 50.0f) return false;
+		return true;
+	}
+	if (mode == 0) {
+		if (target_share < 0.0f || target_share > 1.0f) return false;
+		return true;
+	}
+	return false;
+}
+
+void execute_change_factory_state_ownership(sys::state& state, dcon::nation_id source, dcon::factory_id f, uint8_t mode, float target_share) {
+	if (mode == 1) {
+		economy::dual_ownership::nationalize_factory(state, f, economy::dual_ownership::nationalization_mode::compensated);
+	} else if (mode == 2) {
+		economy::dual_ownership::nationalize_factory(state, f, economy::dual_ownership::nationalization_mode::confiscation);
+	} else if (mode == 3) {
+		economy::dual_ownership::privatize_factory(state, f);
+	} else if (mode == 0) {
+		economy::dual_ownership::set_factory_state_ownership(state, f, target_share);
+	}
+}
+
+void change_central_bank_policy(sys::state& state, dcon::nation_id source, float base_interest_rate, uint8_t standard_mode) {
+	command_data p{ command_type::change_central_bank_policy, state.local_player_id };
+	auto data = central_bank_policy_data{ base_interest_rate, standard_mode };
+	p << data;
+	add_to_command_queue(state, p);
+}
+
+bool can_change_central_bank_policy(sys::state& state, dcon::nation_id source, float base_interest_rate, uint8_t standard_mode) {
+	if (!state.current_scene.game_in_progress) return false;
+	if (!state.world.nation_is_valid(source)) return false;
+	if (base_interest_rate >= 0.0f && (base_interest_rate < 0.001f || base_interest_rate > 0.50f)) return false;
+	if (standard_mode > 4) return false;
+	return true;
+}
+
+void execute_change_central_bank_policy(sys::state& state, dcon::nation_id source, float base_interest_rate, uint8_t standard_mode) {
+	auto& cb = economy::get_central_bank_mut(state, source);
+	if (base_interest_rate >= 0.0f) {
+		cb.base_interest_rate = base_interest_rate;
+	}
+	if (standard_mode == 1) cb.standard = economy::currency_standard::gold_standard;
+	else if (standard_mode == 2) cb.standard = economy::currency_standard::silver_standard;
+	else if (standard_mode == 3) cb.standard = economy::currency_standard::bimetallic_standard;
+	else if (standard_mode == 4) cb.standard = economy::currency_standard::fiat_standard;
 }
 
 } // namespace command
