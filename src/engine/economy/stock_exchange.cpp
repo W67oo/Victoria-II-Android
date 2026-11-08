@@ -47,6 +47,8 @@ std::unordered_map<uint32_t, InternalNationData>  g_nation_data;
 void initialize(sys::state& state) {
     g_factory_data.clear();
     g_nation_data.clear();
+    g_factory_data.reserve(std::max(2048u, uint32_t(state.world.factory_size() * 2)));
+    g_nation_data.reserve(std::max(128u, uint32_t(state.world.nation_size() * 2)));
 
     // Initialize all existing factories with baseline market quotes
     state.world.for_each_factory([&](dcon::factory_id f) {
