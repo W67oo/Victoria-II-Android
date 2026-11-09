@@ -11,9 +11,6 @@
 #include "economy_constants.hpp"
 #include "economy.hpp"
 #include "price.hpp"
-#include "central_bank.hpp"
-#include "dual_ownership.hpp"
-#include "stock_exchange.hpp"
 
 namespace ui {
 
@@ -58,14 +55,7 @@ enum class ledger_sort_type {
 	factory_level,
 	gdp,
 	gdp_capita,
-	sol,
-	sovereign_rating,
-	discount_rate,
-	currency_standard,
-	bullion_reserves,
-	stock_market_cap,
-	state_dividends,
-	market_pe
+	sol
 };
 
 struct ledger_sort {
@@ -118,7 +108,7 @@ public:
 		if(parent) {
 			auto num = int8_t(content.value - 1);
 			if(num <= 0)
-				num = 13;
+				num = 12;
 			Cyto::Any new_payload = ledger_page_number{num};
 			parent->impl_set(state, new_payload);
 		}
@@ -130,7 +120,7 @@ public:
 	void button_action(sys::state& state) noexcept override {
 		if(parent) {
 			auto num = int8_t(content.value + 1);
-			if(num > 13)
+			if(num > 12)
 				num = 1;
 			Cyto::Any new_payload = ledger_page_number{num};
 			parent->impl_set(state, new_payload);
@@ -668,381 +658,6 @@ public:
 				}
 			});
 			break;
-		default:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				if(lsort.reversed) {
-					return text::produce_simple_string(state, text::get_name(state, a)) > text::produce_simple_string(state, text::get_name(state, b));
-				} else {
-					return text::produce_simple_string(state, text::get_name(state, a)) < text::produce_simple_string(state, text::get_name(state, b));
-				}
-			});
-			break;
-		}
-
-		update(state);
-	}
-};
-
-
-//
-// Nation finance & capital markets (Page 13)
-//
-
-class nation_credit_rating_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		auto const& cb = economy::get_central_bank(state, nation_id);
-		return economy::get_rating_str(cb.credit_rating);
-	}
-	tooltip_behavior has_tooltip(sys::state& state) noexcept override {
-		return tooltip_behavior::variable_tooltip;
-	}
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override {
-		auto n = retrieve<dcon::nation_id>(state, parent);
-		auto const& cb = economy::get_central_bank(state, n);
-		text::add_line(state, contents, "alice_ledger_rating_tip");
-		text::add_line(state, contents, std::string("Rating: ") + economy::get_rating_str(cb.credit_rating));
-		text::add_line(state, contents, "Spread: +" + std::to_string(int(economy::get_credit_spread(cb.credit_rating) * 10000.0f)) + " bps");
-	}
-};
-
-class nation_discount_rate_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		auto const& cb = economy::get_central_bank(state, nation_id);
-		char buf[32];
-		snprintf(buf, sizeof(buf), "%.1f%%", cb.base_interest_rate * 100.0f);
-		return buf;
-	}
-	tooltip_behavior has_tooltip(sys::state& state) noexcept override {
-		return tooltip_behavior::variable_tooltip;
-	}
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override {
-		auto n = retrieve<dcon::nation_id>(state, parent);
-		auto const& cb = economy::get_central_bank(state, n);
-		text::add_line(state, contents, "alice_ledger_rate_tip");
-		char buf[64];
-		snprintf(buf, sizeof(buf), "Base Rate: %.2f%%", cb.base_interest_rate * 100.0f);
-		text::add_line(state, contents, std::string(buf));
-		snprintf(buf, sizeof(buf), "Inflation: %+.2f%%", cb.inflation_rate * 100.0f);
-		text::add_line(state, contents, std::string(buf));
-	}
-};
-
-class nation_currency_standard_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		auto const& cb = economy::get_central_bank(state, nation_id);
-		switch(cb.standard) {
-		case economy::currency_standard::gold_standard: return text::produce_simple_string(state, "alice_cur_gold");
-		case economy::currency_standard::silver_standard: return text::produce_simple_string(state, "alice_cur_silver");
-		case economy::currency_standard::bimetallic_standard: return text::produce_simple_string(state, "alice_cur_bimetal");
-		case economy::currency_standard::fiat_standard: return text::produce_simple_string(state, "alice_cur_fiat");
-		}
-		return "-";
-	}
-};
-
-class nation_bullion_reserves_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		auto const& cb = economy::get_central_bank(state, nation_id);
-		char buf[32];
-		if (cb.bullion_reserve >= 1000000.0f)
-			snprintf(buf, sizeof(buf), "£%.1fM", cb.bullion_reserve / 1000000.0f);
-		else if (cb.bullion_reserve >= 1000.0f)
-			snprintf(buf, sizeof(buf), "£%.1fk", cb.bullion_reserve / 1000.0f);
-		else
-			snprintf(buf, sizeof(buf), "£%.0f", cb.bullion_reserve);
-		return buf;
-	}
-};
-
-class nation_stock_market_cap_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		auto metrics = economy::stock_market::get_national_metrics(state, nation_id);
-		char buf[32];
-		if (metrics.total_market_cap >= 1000000.0f)
-			snprintf(buf, sizeof(buf), "£%.1fM", metrics.total_market_cap / 1000000.0f);
-		else if (metrics.total_market_cap >= 1000.0f)
-			snprintf(buf, sizeof(buf), "£%.1fk", metrics.total_market_cap / 1000.0f);
-		else
-			snprintf(buf, sizeof(buf), "£%.0f", metrics.total_market_cap);
-		return buf;
-	}
-};
-
-class nation_state_dividends_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		float st_div = economy::dual_ownership::get_daily_state_dividends(nation_id);
-		char buf[32];
-		if (st_div >= 1000.0f)
-			snprintf(buf, sizeof(buf), "£%.1fk", st_div / 1000.0f);
-		else
-			snprintf(buf, sizeof(buf), "£%.1f", st_div);
-		return buf;
-	}
-};
-
-class nation_market_pe_text : public standard_nation_text {
-public:
-	std::string get_text(sys::state& state, dcon::nation_id nation_id) noexcept override {
-		auto metrics = economy::stock_market::get_national_metrics(state, nation_id);
-		if (metrics.listed_companies == 0) return "-";
-		char buf[32];
-		snprintf(buf, sizeof(buf), "%.1fx", metrics.average_pe);
-		return buf;
-	}
-};
-
-class ledger_nation_finance_buttons : public window_element_base {
-public:
-	void on_create(sys::state& state) noexcept override {
-		window_element_base::on_create(state);
-		auto button_def = state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_button"))->second.definition;
-
-		xy_pair cell_offset{ int16_t(24), 0 };
-		auto cell_width = (972 - cell_offset.x) / 8;
-		auto apply_offset = [&](auto& ptr) {
-			ptr->base_data.position = cell_offset;
-			ptr->base_data.size.x = int16_t(cell_width);
-			cell_offset.x += ptr->base_data.size.x;
-		};
-
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::country_name);
-			ptr->set_button_text(state, text::produce_simple_string(state, "ledger_country_name"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::sovereign_rating);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_rating"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::discount_rate);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_rate"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::currency_standard);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_standard"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::bullion_reserves);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_bullion"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::stock_market_cap);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_stock_cap"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::state_dividends);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_st_div"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		{
-			auto ptr = make_element_by_type<ledger_generic_sort_button>(state, button_def, ledger_sort_type::market_pe);
-			ptr->set_button_text(state, text::produce_simple_string(state, "alice_ledger_market_pe"));
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-	}
-};
-
-class ledger_nation_finance_entry : public listbox_row_element_base<dcon::nation_id> {
-	flag_button* country_flag = nullptr;
-
-public:
-	void on_create(sys::state& state) noexcept override {
-		listbox_row_element_base::on_create(state);
-		// Country flag
-		{
-			auto ptr = make_element_by_type<flag_button>(state, state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_flag"))->second.definition);
-			country_flag = ptr.get();
-			add_child_to_front(std::move(ptr));
-		}
-		xy_pair cell_offset{int16_t(country_flag->base_data.position.x + country_flag->base_data.size.x), 0};
-		auto cell_width = (972 - cell_offset.x) / 8;
-		auto apply_offset = [&](auto& ptr) {
-			ptr->base_data.position = cell_offset;
-			ptr->base_data.size.x = int16_t(cell_width);
-			cell_offset.x += ptr->base_data.size.x;
-		};
-		// Country name
-		{
-			auto ptr = make_element_by_type<generic_name_text<dcon::nation_id>>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// Rating
-		{
-			auto ptr = make_element_by_type<nation_credit_rating_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// Discount Rate
-		{
-			auto ptr = make_element_by_type<nation_discount_rate_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// Standard
-		{
-			auto ptr = make_element_by_type<nation_currency_standard_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// Bullion
-		{
-			auto ptr = make_element_by_type<nation_bullion_reserves_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// Market Cap
-		{
-			auto ptr = make_element_by_type<nation_stock_market_cap_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// State Dividends
-		{
-			auto ptr = make_element_by_type<nation_state_dividends_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-		// Market P/E
-		{
-			auto ptr = make_element_by_type<nation_market_pe_text>(state,
-					state.ui_state.defs_by_name.find(state.lookup_key("ledger_default_textbox"))->second.definition);
-			apply_offset(ptr);
-			add_child_to_front(std::move(ptr));
-		}
-	}
-
-	message_result get(sys::state& state, Cyto::Any& payload) noexcept override {
-		if(payload.holds_type<dcon::nation_id>()) {
-			payload.emplace<dcon::nation_id>(content);
-			return message_result::consumed;
-		}
-		return listbox_row_element_base::get(state, payload);
-	}
-};
-
-class ledger_nation_finance_listbox : public listbox_element_base<ledger_nation_finance_entry, dcon::nation_id> {
-protected:
-	std::string_view get_row_element_name() override {
-		return "default_listbox_entry";
-	}
-
-public:
-	void on_update(sys::state& state) noexcept override {
-		row_contents.clear();
-		state.world.for_each_nation([&](dcon::nation_id id) {
-			if(state.world.nation_get_owned_province_count(id) != 0)
-				row_contents.push_back(id);
-		});
-
-		auto lsort = retrieve<ledger_sort>(state, parent);
-		ledger_sort_type st = std::holds_alternative<ledger_sort_type>(lsort.type) ? std::get<ledger_sort_type>(lsort.type) : ledger_sort_type::country_name;
-		switch(st) {
-		case ledger_sort_type::sovereign_rating:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				auto const& cba = economy::get_central_bank(state, a);
-				auto const& cbb = economy::get_central_bank(state, b);
-				if(lsort.reversed) {
-					return static_cast<uint8_t>(cba.credit_rating) > static_cast<uint8_t>(cbb.credit_rating);
-				} else {
-					return static_cast<uint8_t>(cba.credit_rating) < static_cast<uint8_t>(cbb.credit_rating);
-				}
-			});
-			break;
-		case ledger_sort_type::discount_rate:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				auto const& cba = economy::get_central_bank(state, a);
-				auto const& cbb = economy::get_central_bank(state, b);
-				if(lsort.reversed) {
-					return cba.base_interest_rate < cbb.base_interest_rate;
-				} else {
-					return cba.base_interest_rate > cbb.base_interest_rate;
-				}
-			});
-			break;
-		case ledger_sort_type::currency_standard:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				auto const& cba = economy::get_central_bank(state, a);
-				auto const& cbb = economy::get_central_bank(state, b);
-				if(lsort.reversed) {
-					return static_cast<uint8_t>(cba.standard) < static_cast<uint8_t>(cbb.standard);
-				} else {
-					return static_cast<uint8_t>(cba.standard) > static_cast<uint8_t>(cbb.standard);
-				}
-			});
-			break;
-		case ledger_sort_type::bullion_reserves:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				auto const& cba = economy::get_central_bank(state, a);
-				auto const& cbb = economy::get_central_bank(state, b);
-				if(lsort.reversed) {
-					return cba.bullion_reserve < cbb.bullion_reserve;
-				} else {
-					return cba.bullion_reserve > cbb.bullion_reserve;
-				}
-			});
-			break;
-		case ledger_sort_type::stock_market_cap:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				auto ma = economy::stock_market::get_national_metrics(state, a);
-				auto mb = economy::stock_market::get_national_metrics(state, b);
-				if(lsort.reversed) {
-					return ma.total_market_cap < mb.total_market_cap;
-				} else {
-					return ma.total_market_cap > mb.total_market_cap;
-				}
-			});
-			break;
-		case ledger_sort_type::state_dividends:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				float sda = economy::dual_ownership::get_daily_state_dividends(a);
-				float sdb = economy::dual_ownership::get_daily_state_dividends(b);
-				if(lsort.reversed) {
-					return sda < sdb;
-				} else {
-					return sda > sdb;
-				}
-			});
-			break;
-		case ledger_sort_type::market_pe:
-			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
-				auto ma = economy::stock_market::get_national_metrics(state, a);
-				auto mb = economy::stock_market::get_national_metrics(state, b);
-				if(lsort.reversed) {
-					return ma.average_pe < mb.average_pe;
-				} else {
-					return ma.average_pe > mb.average_pe;
-				}
-			});
-			break;
-		case ledger_sort_type::country_name:
 		default:
 			std::sort(row_contents.begin(), row_contents.end(), [&](dcon::nation_id a, dcon::nation_id b) {
 				if(lsort.reversed) {
@@ -2841,7 +2456,6 @@ class ledger_window : public window_element_base {
 	ledger_province_population_listbox* provinces_pops_listbox = nullptr;
 	ledger_provinces_production_listbox* provinces_production_listbox = nullptr;
 	ledger_factories_production_listbox* factory_production_listbox = nullptr;
-	ledger_nation_finance_listbox* nation_finance_listbox = nullptr;
 
 	ledger_sort current_sorting;
 
@@ -2856,7 +2470,6 @@ class ledger_window : public window_element_base {
 		provinces_pops_listbox->set_visible(state, false);
 		provinces_production_listbox->set_visible(state, false);
 		factory_production_listbox->set_visible(state, false);
-		nation_finance_listbox->set_visible(state, false);
 
 		// Linegraphs
 		commodity_linegraph->set_visible(state, false);
@@ -2997,17 +2610,6 @@ public:
 			add_child_to_front(std::move(ptr));
 		}
 
-		{
-			auto ptr = make_element_by_type<ledger_nation_finance_listbox>(state, listbox_def_id);
-			nation_finance_listbox = ptr.get();
-
-			auto ptrb = make_element_by_type<ledger_nation_finance_buttons>(state, sort_buttons_window_id);
-			ptrb->base_data.position.x -= ptr->base_data.position.x;
-			ptrb->base_data.position.y -= ptr->base_data.position.y;
-			ptr->add_child_to_back(std::move(ptrb));
-
-			add_child_to_front(std::move(ptr));
-		}
 		//gdp block
 
 		{
@@ -3133,10 +2735,6 @@ public:
 			gdp_linegraph->set_visible(state, true);
 			gdp_linegraph_legend->set_visible(state, true);
 			gdp_linegraph_image->set_visible(state, true);
-			break;
-		case 13:
-			ledger_header_text->set_text(state, text::produce_simple_string(state, "alice_ledger_header_finance"));
-			nation_finance_listbox->set_visible(state, true);
 			break;
 		default:
 			break;

@@ -1,4 +1,4 @@
-﻿#include <algorithm>
+#include <algorithm>
 #include <functional>
 #include <thread>
 #include "system_state.hpp"
@@ -34,7 +34,6 @@
 #include "money.hpp"
 #include "diplomatic_messages.hpp"
 #include "tick_scheduler.hpp"
-#include "mobile_province_drawer.hpp"
 #include "economy_constants.hpp"
 #include "alice_ui.hpp"
 #include "commands.hpp"
@@ -6900,9 +6899,6 @@ void sys::state::set_selected_province(dcon::province_id prov_id) {
 		selected_regiments_clear(*this);
 		selected_ships_clear(*this);
 		game_state_updated.store(true, std::memory_order_release);
-		if(ui_state.mobile_province_drawer) {
-			ui_state.mobile_province_drawer->open_province(*this, prov_id);
-		}
 	}
 	else {
 		// Otherwise - just hide the province window and province selection w/o deselecting armies
@@ -6910,9 +6906,6 @@ void sys::state::set_selected_province(dcon::province_id prov_id) {
 		map_state.selected_province = prov_id;
 		if(ui_state.province_window) {
 			ui_state.province_window->set_visible(*this, false);
-		}
-		if(ui_state.mobile_province_drawer) {
-			ui_state.mobile_province_drawer->close_drawer(*this);
 		}
 	}
 	current_scene.on_province_selected(*this);

@@ -12,6 +12,7 @@
 #include "alice_ui.hpp"
 #include "immediate_mode.hpp"
 #include "commands.hpp"
+#include "macro_finance_window.hpp"
 
 namespace game_scene {
 
@@ -266,11 +267,7 @@ void select_national_identity_from_selected_province(sys::state& state) {
 
 void send_selected_province_to_province_window(sys::state& state) {
 	if(state.ui_state.province_window) {
-#if defined(VIC2_ANDROID_MOBILE) || defined(__ANDROID__)
-		state.set_selected_province(state.map_state.selected_province);
-#else
 		static_cast<ui::province_view_window*>(state.ui_state.province_window)->set_active_province(state, state.map_state.selected_province);
-#endif
 	}
 }
 
@@ -789,6 +786,8 @@ void in_game_hotkeys(sys::state& state, sys::virtual_key keycode, sys::key_modif
 			switch_scene(state, scene_id::in_game_economy_viewer);
 		}else if(keycode == sys::virtual_key::M && state.ui_state.ctrl_held_down) {
 			switch_scene(state, scene_id::in_game_production_view);
+		} else if(keycode == sys::virtual_key::F11 || (keycode == sys::virtual_key::F && state.ui_state.ctrl_held_down)) {
+			ui::toggle_macro_finance_window(state);
 		} else if(keycode == sys::virtual_key::NUMPAD1 || keycode == sys::virtual_key::NUM_1) {
 			ctrl_group = 1;
 		} else if(keycode == sys::virtual_key::NUMPAD2 || keycode == sys::virtual_key::NUM_2) {

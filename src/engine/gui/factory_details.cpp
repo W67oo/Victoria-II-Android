@@ -7,8 +7,6 @@
 #include "labour_details.hpp"
 #include "commands.hpp"
 #include "ai_economy.hpp"
-#include "dual_ownership.hpp"
-#include "stock_exchange.hpp"
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
@@ -36,7 +34,6 @@ struct factory_details_main_information_employment_units_t;
 struct factory_details_main_information_production_units_t;
 struct factory_details_main_effective_output_t;
 struct factory_details_main_subsidy_t;
-struct factory_details_main_total_investments_label_t;
 struct factory_details_main_total_investments_value_t;
 struct factory_details_main_investment_expansion_t;
 struct factory_details_main_investment_efficiency_t;
@@ -172,31 +169,8 @@ struct factory_details_main_subsidy_t : public alice_ui::template_label {
 // END
 	void on_update(sys::state& state) noexcept override;
 };
-struct factory_details_main_total_investments_label_t : public alice_ui::template_label {
-// BEGIN main::total_investments_label::variables
-	ui::message_result on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
-	ui::message_result on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
-	ui::tooltip_behavior has_tooltip(sys::state& state) noexcept override {
-		return ui::tooltip_behavior::variable_tooltip;
-	}
-	ui::message_result test_mouse(sys::state& state, int32_t x, int32_t y, ui::mouse_probe_type type) noexcept override {
-		return ui::message_result::consumed;
-	}
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
-// END
-	void on_update(sys::state& state) noexcept override;
-};
 struct factory_details_main_total_investments_value_t : public alice_ui::template_label {
 // BEGIN main::total_investments_value::variables
-	ui::message_result on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
-	ui::message_result on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept override;
-	ui::tooltip_behavior has_tooltip(sys::state& state) noexcept override {
-		return ui::tooltip_behavior::variable_tooltip;
-	}
-	ui::message_result test_mouse(sys::state& state, int32_t x, int32_t y, ui::mouse_probe_type type) noexcept override {
-		return ui::message_result::consumed;
-	}
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override;
 // END
 	void on_update(sys::state& state) noexcept override;
 };
@@ -314,7 +288,7 @@ struct factory_details_main_t : public layout_window_element {
 	std::unique_ptr<template_icon_graphic> effective_output_to_subsidy;
 	std::unique_ptr<factory_details_main_subsidy_t> subsidy;
 	std::unique_ptr<template_label> investment;
-	std::unique_ptr<factory_details_main_total_investments_label_t> total_investments_label;
+	std::unique_ptr<template_label> total_investments_label;
 	std::unique_ptr<factory_details_main_total_investments_value_t> total_investments_value;
 	std::unique_ptr<template_icon_graphic> icon_split_investment;
 	std::unique_ptr<factory_details_main_investment_expansion_t> investment_expansion;
@@ -712,107 +686,6 @@ void factory_details_main_subsidy_t::on_update(sys::state& state) noexcept {
 	set_text(state, text::format_money(main.last_explanation.revenue_from_subsidies));
 // END
 }
-
-void factory_details_main_total_investments_label_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
-	auto factory = state.selected_factory;
-	auto quote = economy::stock_market::get_factory_quote(state, factory);
-	auto nation = state.local_player_nation;
-	float inv_pool = state.world.nation_get_private_investment(nation);
-	bool civ = state.world.nation_get_is_civilized(nation);
-
-	auto box = text::open_layout_box(contents, 0);
-	text::add_to_layout_box(state, contents, box, std::string("【资本市场操作：公开上市 (IPO) / 退市】\n"));
-	if (quote.is_public) {
-		text::add_to_layout_box(state, contents, box, std::string("当前挂牌状态: 【公开上市企业】\n"));
-		text::add_to_layout_box(state, contents, box, std::string("上市可在证券交易所公开交易，吸引社会资本增发股份。\n"));
-		bool can_delist = command::can_change_factory_state_ownership(state, nation, factory, 5, 0.0f);
-		text::add_to_layout_box(state, contents, box, "▶ 点击 (Tap): 申请公开退市私有化 " + std::string(can_delist ? "[点击执行]" : "[不可行]") + "\n");
-	} else {
-		text::add_to_layout_box(state, contents, box, std::string("当前挂牌状态: 【非公开发行企业】\n"));
-		text::add_to_layout_box(state, contents, box, "上市条件: 文明国家 (" + std::string(civ ? "满足" : "未满足") + ")，民间投资储备 ≥ £20 (当前: £" + text::format_float(inv_pool, 1) + ")\n");
-		text::add_to_layout_box(state, contents, box, std::string("成功挂牌可吸收民间投资储备补充工厂流动资金 (最高占市值20%)。\n"));
-		bool can_ipo = command::can_change_factory_state_ownership(state, nation, factory, 4, 0.0f);
-		text::add_to_layout_box(state, contents, box, "▶ 点击 (Tap): 申请公开发行上市 (IPO) " + std::string(can_ipo ? "[点击执行]" : "[条件未满足]") + "\n");
-	}
-	text::close_layout_box(contents, box);
-}
-
-ui::message_result factory_details_main_total_investments_label_t::on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
-	auto factory = state.selected_factory;
-	auto quote = economy::stock_market::get_factory_quote(state, factory);
-	if (quote.is_public) {
-		if (command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 5, 0.0f)) {
-			command::change_factory_state_ownership(state, state.local_player_nation, factory, 5, 0.0f);
-		}
-	} else {
-		if (command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 4, 0.0f)) {
-			command::change_factory_state_ownership(state, state.local_player_nation, factory, 4, 0.0f);
-		}
-	}
-	return ui::message_result::consumed;
-}
-
-ui::message_result factory_details_main_total_investments_label_t::on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
-	return on_lbutton_down(state, x, y, mods);
-}
-
-void factory_details_main_total_investments_label_t::on_update(sys::state& state) noexcept {
-	auto factory = state.selected_factory;
-	auto quote = economy::stock_market::get_factory_quote(state, factory);
-	if (quote.is_public) {
-		set_text(state, std::string("总投资(已上市)"));
-	} else {
-		set_text(state, std::string("总投资(未上市)"));
-	}
-}
-void factory_details_main_total_investments_value_t::update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept {
-	auto factory = state.selected_factory;
-	float state_share = economy::dual_ownership::get_factory_state_ownership(state, factory);
-	auto quote = economy::stock_market::get_factory_quote(state, factory);
-
-	auto box = text::open_layout_box(contents, 0);
-	text::add_to_layout_box(state, contents, box, std::string("【企业资本与股权结构】\n"));
-	text::add_to_layout_box(state, contents, box, "国家股权份额: " + text::format_percentage(state_share, 1) + "\n");
-	text::add_to_layout_box(state, contents, box, "民间资本份额: " + text::format_percentage(1.0f - state_share, 1) + "\n");
-	if (quote.is_public) {
-		text::add_to_layout_box(state, contents, box, std::string("上市状态: 已在国家证券交易所挂牌\n"));
-		text::add_to_layout_box(state, contents, box, "当前股价: £ " + text::format_float(quote.share_price, 2) + "\n");
-		text::add_to_layout_box(state, contents, box, "企业估值 (市值): £ " + text::format_float(quote.market_cap, 1) + "\n");
-		text::add_to_layout_box(state, contents, box, "动态市盈率 (P/E): " + text::format_float(quote.pe_ratio, 1) + "x\n");
-		text::add_to_layout_box(state, contents, box, "年化股息收益率: " + text::format_percentage(quote.dividend_yield, 2) + "\n");
-	} else {
-		text::add_to_layout_box(state, contents, box, std::string("上市状态: 未公开交易 (非上市公司)\n"));
-		text::add_to_layout_box(state, contents, box, "估值 (净资产+重置成本): £ " + text::format_float(quote.market_cap, 1) + "\n");
-	}
-	if (quote.in_distress) {
-		text::add_to_layout_box(state, contents, box, std::string("财务状况: 处于严重亏损与流动性枯竭中 (重组预警)\n"));
-	} else {
-		text::add_to_layout_box(state, contents, box, std::string("财务状况: 正常稳健\n"));
-	}
-	bool can_nat = command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 1, 1.0f);
-	bool can_priv = command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 3, 0.0f);
-	text::add_to_layout_box(state, contents, box, std::string("【移动端触控交互】\n"));
-	text::add_to_layout_box(state, contents, box, "▶ 点击 (Tap): 国家出资赎买国有化 " + std::string(can_nat ? "[点击执行]" : "[不可行/资金不足]") + "\n");
-	text::add_to_layout_box(state, contents, box, "▶ 长按 (Long Press): 股权拍卖民营化 " + std::string(can_priv ? "[长按执行]" : "[不可行/政策禁止]"));
-	text::close_layout_box(contents, box);
-}
-
-ui::message_result factory_details_main_total_investments_value_t::on_lbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
-	auto factory = state.selected_factory;
-	if (command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 1, 1.0f)) {
-		command::change_factory_state_ownership(state, state.local_player_nation, factory, 1, 1.0f);
-	}
-	return ui::message_result::consumed;
-}
-
-ui::message_result factory_details_main_total_investments_value_t::on_rbutton_down(sys::state& state, int32_t x, int32_t y, sys::key_modifiers mods) noexcept {
-	auto factory = state.selected_factory;
-	if (command::can_change_factory_state_ownership(state, state.local_player_nation, factory, 3, 0.0f)) {
-		command::change_factory_state_ownership(state, state.local_player_nation, factory, 3, 0.0f);
-	}
-	return ui::message_result::consumed;
-}
-
 void factory_details_main_total_investments_value_t::on_update(sys::state& state) noexcept {
 	factory_details_main_t& main = *((factory_details_main_t*)(parent)); 
 // BEGIN main::total_investments_value::update
@@ -1864,7 +1737,7 @@ void factory_details_main_t::on_create(sys::state& state) noexcept {
 			pending_children.pop_back(); continue;
 		} else 
 		if(child_data.name == "total_investments_label") {
-			total_investments_label = std::make_unique<factory_details_main_total_investments_label_t>();
+			total_investments_label = std::make_unique<template_label>();
 			total_investments_label->parent = this;
 			auto cptr = total_investments_label.get();
 			cptr->base_data.position.x = child_data.x_pos;

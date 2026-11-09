@@ -7,9 +7,6 @@
 #include "economy.hpp"
 #include "advanced_province_buildings.hpp"
 #include "economy_constants.hpp"
-#include "dual_ownership.hpp"
-#include "stock_exchange.hpp"
-#include "culture_constants.hpp"
 
 namespace ui {
 
@@ -90,8 +87,8 @@ public:
 
 		{
 			auto box = text::open_layout_box(contents);
-			auto limit = economy::province_factory_slot_limit(state, pid);
-			auto r = num_factories < limit;
+			auto urbanisation = state.world.province_get_advanced_province_building_max_private_size(pid, advanced_province_buildings::list::local_cities_and_towns);
+			auto r = num_factories < int32_t(state.defines.factories_per_state * urbanisation / economy::factories_per_state_required_city_size);
 			if(r) {
 				text::add_to_layout_box(state, contents, box, text::embedded_icon::check);
 			} else {
@@ -99,7 +96,7 @@ public:
 			}
 			text::add_space_to_layout_box(state, contents, box);
 
-			text::localised_single_sub_box(state, contents, box, "factory_condition_4", text::variable_type::val, int64_t(limit));
+			text::localised_single_sub_box(state, contents, box, "factory_condition_4", text::variable_type::val, int64_t(state.defines.factories_per_state * urbanisation / economy::factories_per_state_required_city_size));
 			text::close_layout_box(contents, box);
 		}
 	}
@@ -273,134 +270,6 @@ public:
 	}
 };
 
-class context_menu_nationalize_factory : public context_menu_entry_logic {
-public:
-	dcon::text_key get_name(sys::state& state, context_menu_context context) noexcept override {
-		return state.lookup_key("nationalize_factory");
-	}
-
-	bool is_available(sys::state& state, context_menu_context context) noexcept override {
-		auto fid = context.factory;
-		if (!state.world.factory_is_valid(fid)) return false;
-		auto p = state.world.factory_get_province_from_factory_location(fid);
-		if (state.world.province_get_nation_from_province_ownership(p) != state.local_player_nation) return false;
-
-		float state_share = economy::dual_ownership::get_factory_state_ownership(state, fid);
-		if (state_share >= 0.99f) return false;
-
-		auto rules = state.world.nation_get_combined_issue_rules(state.local_player_nation);
-		return (rules & issue_rule::build_factory) != 0;
-	}
-
-	void button_action(sys::state& state, context_menu_context context, ui::element_base* parent) noexcept override {
-		auto fid = context.factory;
-		auto rules = state.world.nation_get_combined_issue_rules(state.local_player_nation);
-		auto mode = (rules & issue_rule::pop_build_factory)
-			? economy::dual_ownership::nationalization_mode::compensated
-			: economy::dual_ownership::nationalization_mode::confiscation;
-		economy::dual_ownership::nationalize_factory(state, fid, mode);
-	}
-
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents, context_menu_context context) noexcept override {
-		auto box = text::open_layout_box(contents, 0);
-		text::add_to_layout_box(state, contents, box, std::string("【国有化企业】\n将该工厂的民间股权赎买收归国有，未来所有净利润将直接全额划拨入国库。"));
-		text::close_layout_box(contents, box);
-	}
-};
-
-class context_menu_privatize_factory : public context_menu_entry_logic {
-public:
-	dcon::text_key get_name(sys::state& state, context_menu_context context) noexcept override {
-		return state.lookup_key("privatize_factory");
-	}
-
-	bool is_available(sys::state& state, context_menu_context context) noexcept override {
-		auto fid = context.factory;
-		if (!state.world.factory_is_valid(fid)) return false;
-		auto p = state.world.factory_get_province_from_factory_location(fid);
-		if (state.world.province_get_nation_from_province_ownership(p) != state.local_player_nation) return false;
-
-		float state_share = economy::dual_ownership::get_factory_state_ownership(state, fid);
-		if (state_share <= 0.01f) return false;
-
-		auto rules = state.world.nation_get_combined_issue_rules(state.local_player_nation);
-		return (rules & issue_rule::pop_build_factory) != 0;
-	}
-
-	void button_action(sys::state& state, context_menu_context context, ui::element_base* parent) noexcept override {
-		auto fid = context.factory;
-		economy::dual_ownership::privatize_factory(state, fid);
-	}
-
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents, context_menu_context context) noexcept override {
-		auto box = text::open_layout_box(contents, 0);
-		text::add_to_layout_box(state, contents, box, std::string("【企业私有化 / 上市】\n向民间资本家投资池拍卖转让国家持有的企业股权，所得款项作为一次性财政收入直接充实国库。"));
-		text::close_layout_box(contents, box);
-	}
-};
-
-class context_menu_ipo_factory : public context_menu_entry_logic {
-public:
-	dcon::text_key get_name(sys::state& state, context_menu_context context) noexcept override {
-		return state.lookup_key("ipo_factory");
-	}
-
-	bool is_available(sys::state& state, context_menu_context context) noexcept override {
-		auto fid = context.factory;
-		if (!state.world.factory_is_valid(fid)) return false;
-		auto p = state.world.factory_get_province_from_factory_location(fid);
-		if (state.world.province_get_nation_from_province_ownership(p) != state.local_player_nation) return false;
-
-		auto quote = economy::stock_market::get_factory_quote(state, fid);
-		if (quote.is_public) return false;
-		if (quote.in_distress) return false;
-		return true;
-	}
-
-	void button_action(sys::state& state, context_menu_context context, ui::element_base* parent) noexcept override {
-		auto fid = context.factory;
-		economy::stock_market::conduct_ipo(state, fid);
-	}
-
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents, context_menu_context context) noexcept override {
-		auto box = text::open_layout_box(contents, 0);
-		text::add_to_layout_box(state, contents, box, std::string("【企业公开上市 (IPO)】\n将该工厂在国家证券交易所公开发行股票挂牌上市，吸引民间资本投资并提升估值与流动性。"));
-		text::close_layout_box(contents, box);
-	}
-};
-
-class context_menu_delist_factory : public context_menu_entry_logic {
-public:
-	dcon::text_key get_name(sys::state& state, context_menu_context context) noexcept override {
-		return state.lookup_key("delist_factory");
-	}
-
-	bool is_available(sys::state& state, context_menu_context context) noexcept override {
-		auto fid = context.factory;
-		if (!state.world.factory_is_valid(fid)) return false;
-		auto p = state.world.factory_get_province_from_factory_location(fid);
-		if (state.world.province_get_nation_from_province_ownership(p) != state.local_player_nation) return false;
-
-		auto quote = economy::stock_market::get_factory_quote(state, fid);
-		return quote.is_public;
-	}
-
-	void button_action(sys::state& state, context_menu_context context, ui::element_base* parent) noexcept override {
-		auto fid = context.factory;
-		economy::stock_market::delist_factory(state, fid);
-	}
-
-	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents, context_menu_context context) noexcept override {
-		auto box = text::open_layout_box(contents, 0);
-		text::add_to_layout_box(state, contents, box, std::string("【股票摘牌退市】\n将该工厂从国家证券交易所摘牌退市，停止二级市场公开交易，转为未上市企业。"));
-		text::close_layout_box(contents, box);
-	}
-};
-
-inline static context_menu_ipo_factory context_menu_ipo_factory_logic;
-inline static context_menu_delist_factory context_menu_delist_factory_logic;
-inline static context_menu_nationalize_factory context_menu_nationalize_factory_logic;
-inline static context_menu_privatize_factory context_menu_privatize_factory_logic;
 inline static context_menu_delete_factory context_menu_delete_factory_logic;
 inline static context_menu_upgrade_factory context_menu_upgrade_factory_logic;
 inline static context_menu_refit_factory context_menu_refit_factory_logic;
@@ -489,10 +358,6 @@ void show_context_menu(sys::state& state, context_menu_context context) {
 		logics[0] = &context_menu_upgrade_factory_logic;
 		logics[1] = &context_menu_refit_factory_logic;
 		logics[2] = &context_menu_delete_factory_logic;
-		logics[3] = &context_menu_nationalize_factory_logic;
-		logics[4] = &context_menu_privatize_factory_logic;
-		logics[5] = &context_menu_ipo_factory_logic;
-		logics[6] = &context_menu_delist_factory_logic;
 	}
 	else if(context.fconstruction) {
 		logics[0] = &context_menu_cancel_factory_construction_logic;
