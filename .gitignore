@@ -83,3 +83,4 @@ src/engine/scripting/llvm-c/LLVM-C.lib
 .DS_Store
 Thumbs.db
 desktop.ini
+*.bundle
