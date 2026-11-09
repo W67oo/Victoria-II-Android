@@ -1,4 +1,4 @@
-﻿#include "nations.hpp"
+#include "nations.hpp"
 #include "nations_templates.hpp"
 #include "dcon_generated_ids.hpp"
 #include "demographics.hpp"
@@ -22,7 +22,6 @@
 #include "gui_effect_tooltips.hpp"
 #include "adaptive_ve.hpp"
 #include "money.hpp"
-#include "stock_exchange.hpp"
 #include "province.hpp"
 #include "economy.hpp"
 #include "game_scene.hpp"
@@ -904,34 +903,26 @@ float get_foreign_investment_as_gp(sys::state& state, dcon::nation_id n) {
 
 void update_industrial_scores(sys::state& state) {
 	/*
-	Sum of:
-	- Factory workers & factory level
-	- Corporate stock market cap & enterprise valuation
-	- Railway & infrastructure density
-	- Foreign investment
+	Is the sum of the following two components:
+	- For each state: (fraction of factory workers in each state (types marked with can work factory = yes) to the total-workforce
+	x building level of factories in the state (capped at 1)) x total-factory-levels
+	- For each country that the nation is invested in: define:INVESTMENT_SCORE_FACTOR x the amount invested x 0.05
 	*/
 
 	state.world.for_each_nation([&, iweight = state.defines.investment_score_factor](dcon::nation_id n) {
 		float sum = 0;
 		if(state.world.nation_get_owned_province_count(n) != 0) {
-			float total_rail_bonus = 0.0f;
 			for(auto si : state.world.nation_get_state_ownership(n)) {
 				province::for_each_province_in_state_instance(state, si.get_state(), [&](dcon::province_id p) {
 					for(auto f : state.world.province_get_factory_location(p)) {
 						sum += 4.f * economy::get_factory_level(state, f.get_factory()) * economy::factory_total_employment_score(state, f.get_factory());
 					}
-					int32_t rails = state.world.province_get_building_level(p, uint8_t(economy::province_building_type::railroad));
-					total_rail_bonus += rails * 0.25f;
 				});
 			}
-			auto metrics = economy::stock_market::get_national_metrics(state, n);
-			float mkt_cap_bonus = std::min(1500.0f, metrics.total_market_cap * 0.005f);
-			sum += mkt_cap_bonus;
-			sum += std::min(500.0f, total_rail_bonus);
 			sum += nations::get_foreign_investment_as_gp(state, n) * iweight; /* investment factor is already multiplied by 0.05f on scenario creation */
 		}
 
-		state.world.nation_set_industrial_score(n, uint16_t(std::clamp(sum, 0.0f, 65535.0f)));
+		state.world.nation_set_industrial_score(n, uint16_t(sum));
 	});
 }
 
@@ -2104,17 +2095,22 @@ dcon::nation_id get_market_leader(const sys::state& state, dcon::nation_id natio
 	if(state.world.overlord_get_ruler(overlord)) {
 		return state.world.overlord_get_ruler(overlord);
 	}
-	// Phase 3 (3.3): Dual-Layer Market Structure.
-	// Colonies and puppets share overlord's customs market.
-	// Sovereign spherelings maintain their own domestic market and currency,
-	// trading with their sphere leader tariff-free via preferential bilateral trade.
+	auto sphere = state.world.nation_get_in_sphere_of(nation);
+	if(bool(sphere)) {
+		return sphere;
+	}
 	return nation;
 }
 
 ve::tagged_vector<dcon::nation_id> get_market_leader(const sys::state& state, ve::tagged_vector<dcon::nation_id> nations) {
+	auto sphere = state.world.nation_get_in_sphere_of(nations);
+
 	auto overlord = state.world.overlord_get_ruler(state.world.nation_get_overlord_as_subject(nations));
-	auto has_overlord_mask = overlord != dcon::nation_id{};
-	return ve::select(has_overlord_mask, overlord, nations);
+
+	auto has_overlord_mask = overlord != dcon::nation_id{};;
+	auto has_sphere_mask = sphere != dcon::nation_id{};
+
+	return ve::select(has_overlord_mask, overlord, ve::select(has_sphere_mask, sphere, nations));
 }
 template<war_initiation check_alliance>
 bool would_war_conflict_with_sphere_leader(sys::state& state, dcon::nation_id sphereling, dcon::nation_id target) {

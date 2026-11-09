@@ -158,7 +158,6 @@ struct state {
 	element_base* build_province_unit_window = nullptr;
 	element_base* disband_unit_window = nullptr;
 	element_base* gamerules_window = nullptr;
-	element_base* macro_finance_window = nullptr;
 
 	context_menu_window* context_menu = nullptr;
 	factory_refit_window* factory_refit_win = nullptr;

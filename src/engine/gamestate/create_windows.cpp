@@ -21,7 +21,6 @@
 #include "gui_map_legend.hpp"
 #include "map_tooltip.hpp"
 #include "unit_tooltip.hpp"
-#include "macro_finance_window.hpp"
 
 namespace ui {
 
@@ -400,18 +399,6 @@ void create_in_game_windows(sys::state& state) {
 		new_elm->set_visible(state, !(state.network_mode == sys::network_mode_type::single_player)); // Hidden in singleplayer by default
 		state.ui_state.chat_window = new_elm.get(); // Default for singleplayer is the in-game one, lobby one is useless in sp
 		state.ui_state.root->add_child_to_front(std::move(new_elm));
-	}
-	{
-		// Macro-finance independent GUI window & floating trigger button
-		auto fin_win = std::make_unique<ui::macro_finance_window>();
-		fin_win->on_create(state);
-		fin_win->set_visible(state, false);
-		state.ui_state.macro_finance_window = fin_win.get();
-		state.ui_state.root->add_child_to_front(std::move(fin_win));
-
-		auto fin_btn = std::make_unique<ui::macro_finance_trigger_button>();
-		fin_btn->on_create(state);
-		state.ui_state.root->add_child_to_front(std::move(fin_btn));
 	}
 	state.ui_state.rgos_root->impl_on_update(state);
 	state.ui_state.units_root->impl_on_update(state);

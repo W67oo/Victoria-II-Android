@@ -160,7 +160,7 @@ std::vector<full_construction_factory> estimate_private_investment_construct(sys
 std::vector<full_construction_province> estimate_private_investment_province(sys::state& state, dcon::nation_id nid, float est_private_const_spending);
 
 void change_factory_type_in_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t, dcon::factory_type_id refit_target);
-void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t, bool is_pop_project = false);
+void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t);
 
 // NOTE: used to estimate how much you will pay if you were to subsidize a particular nation,
 // *not* how much you are paying at the moment

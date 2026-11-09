@@ -30,9 +30,6 @@
 #include "military_templates.hpp"
 #include "nations_templates.hpp"
 #include "national_budget.hpp"
-#include "central_bank.hpp"
-#include "dual_ownership.hpp"
-#include "stock_exchange.hpp"
 
 namespace economy {
 
@@ -169,34 +166,19 @@ bool can_take_loans(sys::state& state, dcon::nation_id n) {
 
 float interest_payment(sys::state& state, dcon::nation_id n) {
 	/*
-	Phase 3 (3.4): Central banking dynamic bond yield.
-	Interest rate is governed by central bank base rate + sovereign credit rating spread.
-	Daily interest payment = debt * bond_yield / 365 (with national modifier scaling).
+	Every day, a nation must pay its creditors. It must pay national-modifier-to-loan-interest x debt-amount x interest-to-debt-holder-rate / 30
+	When a nation takes a loan, the interest-to-debt-holder-rate is set at nation-taking-the-loan-technology-loan-interest-modifier + define:LOAN_BASE_INTEREST, with a minimum of 0.01.
 	*/
 	auto debt = state.world.nation_get_local_loan(n);
-	if (debt <= 0.0f) return 0.0f;
-	float bond_yield = economy::get_bond_yield(state, n);
-	float tech_mod = (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::loan_interest) + 1.0f);
-	return debt * std::max(0.01f, bond_yield * tech_mod) / 365.0f;
+	return debt * std::max(0.01f, (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::loan_interest) + 1.0f) * state.defines.loan_base_interest) / 30.0f;
 }
 float max_loan(sys::state& state, dcon::nation_id n) {
 	/*
-	Phase 3: Modern Fractional Reserve Banking Credit Multiplier (M2 = M0 / r)
-	Base reserve requirement r = 0.20 (5x credit multiplier on deposits).
-	Borrowing limit is underpinned by taxable fiscal capacity, provincial bank infrastructure, and fractional bank credit.
+	There is an income cap to how much may be borrowed, namely: define:MAX_LOAN_CAP_FROM_BANKS x (national-modifier-to-max-loan-amount + 1) x national-tax-base.
 	*/
 	auto mod = (state.world.nation_get_modifier_values(n, sys::national_mod_offsets::max_loan_modifier) + 1.0f);
 	auto total_tax_base = state.world.nation_get_total_rich_income(n) + state.world.nation_get_total_middle_income(n) + state.world.nation_get_total_poor_income(n);
-	int32_t total_banks = 0;
-	for (auto p : state.world.nation_get_province_ownership(n)) {
-		total_banks += state.world.province_get_building_level(p.get_province(), uint8_t(economy::province_building_type::bank));
-	}
-	// Bank buildings deepen domestic credit markets: lower reserve drag (down to 10%)
-	float reserve_ratio = std::max(0.10f, 0.20f - total_banks * 0.005f);
-	auto bank_deposits = state.world.nation_get_national_bank(n);
-	float fractional_credit_pool = bank_deposits * ((1.0f - reserve_ratio) / reserve_ratio);
-	float bank_depth_multiplier = 1.0f + std::min(0.50f, total_banks * 0.02f);
-	return std::max(0.0f, (total_tax_base * 2.0f + fractional_credit_pool) * mod * bank_depth_multiplier);
+	return std::max(0.0f, (total_tax_base + state.world.nation_get_national_bank(n)) * mod);
 }
 
 int32_t most_recent_price_record_index(sys::state& state, int offset_days) {
@@ -1496,8 +1478,11 @@ void initialize(sys::state& state) {
 				}
 			});
 
-			// Phase 3: Removed Project Alice artificial money RGO trickle everywhere.
-			// Natural gold/silver bullion monetization from real mining RGOs handles endogenous M0 injection.
+			// add a trickle of money rgo everywhere to produce a source of inflation
+			state.world.province_set_rgo_size(p, economy::money, state.world.province_get_rgo_size(p, economy::money) + 2500.f);
+			state.world.province_set_rgo_potential(p, economy::money, state.world.province_get_rgo_size(p, economy::money) + 5000.f);
+			state.world.province_set_rgo_efficiency(p, economy::money, 1.f);
+			state.world.province_set_rgo_max_efficiency(p, economy::money, 1.f);
 		});
 	}
 
@@ -2504,7 +2489,9 @@ std::vector<full_construction_factory> estimate_private_investment_construct(sys
 			continue; // already building
 
 		int32_t num_factories = province_factory_count(state, s);
-		if(num_factories >= economy::province_factory_slot_limit(state, s)) {
+		auto urbanisation = state.world.province_get_advanced_province_building_max_private_size(s, advanced_province_buildings::list::local_cities_and_towns);
+
+		if(num_factories >= int32_t(state.defines.factories_per_state * urbanisation / economy::factories_per_state_required_city_size)) {
 			continue;
 		}
 
@@ -5439,60 +5426,25 @@ void daily_update(sys::state& state, bool presimulation, float presimulation_sta
 	Start with updating rgo/factory "banks"
 	*/
 
-	dual_ownership::reset_daily_stats();
-	static ve::vectorizable_buffer<float, dcon::province_id> province_state_dividend_buffer(uint32_t(1));
-	{
-		static uint32_t old_prov_count = 1;
-		auto new_prov_count = state.world.province_size();
-		if (new_prov_count > old_prov_count) {
-			province_state_dividend_buffer = state.world.province_make_vectorizable_float_buffer();
-			old_prov_count = new_prov_count;
-		}
-	}
-
 	province::for_each_market_province_parallel_over_market(state, [&](dcon::market_id mid, dcon::state_instance_id sid, dcon::province_id pid){
 		{
 			auto total_factory_profit = 0.f;
-			auto total_state_dividend = 0.f;
 			// FACTORIES
 			for(auto f : state.world.province_get_factory_location(pid)) {
 				auto fac = f.get_factory();
 				auto profit = explain_last_factory_profit(state, fac);
 				state.world.factory_set_profit(fac.id, profit.profit);
-
-				float state_share = dual_ownership::get_factory_state_ownership(state, fac.id);
-				if (profit.profit > 0.0f && state_share > 0.0f) {
-					float state_div = profit.profit * state_share;
-					total_state_dividend += state_div;
-					total_factory_profit += (profit.profit - state_div);
-				} else {
-					total_factory_profit += profit.profit;
-				}
+				total_factory_profit += profit.profit;
 			}
 
-			province_state_dividend_buffer.set(pid, total_state_dividend);
-
 			auto current_bank = state.world.province_get_factory_bank(pid);
-			state.world.province_set_factory_bank(pid, std::max(0.0f, current_bank + total_factory_profit));
+			state.world.province_set_factory_bank(pid, current_bank + total_factory_profit);
 		}
 
 		{
 			auto total_rgo_profit = state.world.province_get_rgo_profit(pid);
 			auto current_bank = state.world.province_get_rgo_bank(pid);
-			state.world.province_set_rgo_bank(pid, std::max(0.0f, current_bank + total_rgo_profit));
-		}
-	});
-
-	// Transfer state enterprise dividends directly to national treasuries
-	state.world.for_each_province([&](dcon::province_id pid) {
-		float div = province_state_dividend_buffer.get(pid);
-		if (div > 0.0f) {
-			auto nation = state.world.province_get_nation_from_province_ownership(pid);
-			if (nation) {
-				float treasury = state.world.nation_get_treasury(nation);
-				state.world.nation_set_treasury(nation, treasury + div);
-				dual_ownership::record_state_dividend(nation, div);
-			}
+			state.world.province_set_rgo_bank(pid, current_bank + total_rgo_profit);
 		}
 	});
 
@@ -5797,27 +5749,12 @@ void daily_update(sys::state& state, bool presimulation, float presimulation_sta
 				next_price = current_price + price_properties::commodity::change_fast<ve::fp_vector>(current_price, supply, demand) / (1.f + 100.f * presimulation_stage) ;				
 				next_price = ve::select(demand <= supply, next_price * (demand + 0.000'001f) / (supply + 0.000'002f), next_price);
 			} else {
-				auto raw_delta = price_properties::commodity::change<ve::fp_vector>(current_price, supply, demand);
-				// Phase 3: Macroeconomic Price Soft Clamping [-90%, +120%] relative to base cost with progressive elasticity damping
-				float base_cost = state.world.commodity_get_cost(cid);
-				if (base_cost <= 0.001f) base_cost = 1.0f;
-				float min_p = std::max(0.01f, base_cost * 0.10f); // -90% soft floor
-				float max_p = std::max(min_p * 2.0f, base_cost * 2.20f); // +120% soft ceiling
-				
-				// Progressive damping resistance:
-				auto damp_up = ve::max(ve::fp_vector{0.05f}, (max_p - current_price) / (max_p - min_p + 0.0001f));
-				auto damp_down = ve::max(ve::fp_vector{0.05f}, (current_price - min_p) / (max_p - min_p + 0.0001f));
-				auto effective_delta = ve::select(raw_delta >= 0.0f, raw_delta * ve::min(ve::fp_vector{1.0f}, damp_up), raw_delta * ve::min(ve::fp_vector{1.0f}, damp_down));
-				next_price = current_price + effective_delta;
+				next_price = current_price + price_properties::commodity::change<ve::fp_vector>(current_price, supply, demand);
 			}
 #ifndef NDEBUG
 			ve::apply([&](auto value) { assert(std::isfinite(value)); }, next_price);
 #endif
-			float base_cost_clamp = state.world.commodity_get_cost(cid);
-			if (base_cost_clamp <= 0.001f) base_cost_clamp = 1.0f;
-			float min_bound = std::max(0.01f, base_cost_clamp * 0.10f);
-			float max_bound = std::max(min_bound * 2.0f, base_cost_clamp * 2.20f);
-			auto next_price_clamped = ve::min(ve::max(next_price, min_bound), max_bound);
+			auto next_price_clamped = ve::min(ve::max(next_price, price_properties::commodity::min), price_properties::commodity::max);
 
 			auto current_confidence = state.world.market_get_price_confidence(ids, cid);
 			auto price_ratio = current_price / next_price_clamped;
@@ -6429,7 +6366,7 @@ construction_status factory_upgrade(sys::state& state, dcon::factory_id f) {
 }
 
 
-void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t, bool is_pop_project) {
+void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t) {
 	float base_size = float(state.world.factory_type_get_base_workforce(t));
 
 	// addition of factory level also represents construction of a small factory town or factory-adjacent housing
@@ -6442,10 +6379,7 @@ void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon:
 		auto fac = f.get_factory();
 		auto fac_type = fac.get_building_type();
 		if(f.get_factory().get_building_type() == t) {
-			float old_size = f.get_factory().get_size();
-			float added_size = float(fac_type.get_base_workforce());
-			f.get_factory().set_size(old_size + added_size);
-			dual_ownership::on_factory_expanded(state, fac.id, old_size, added_size, is_pop_project);
+			f.get_factory().set_size(f.get_factory().get_size() + fac_type.get_base_workforce());
 			return;
 		}
 	}
@@ -6464,7 +6398,6 @@ void add_factory_level_to_province(sys::state& state, dcon::province_id p, dcon:
 	new_fac.set_technology_scale(0.05f + std::max(0.f, national_t) + std::max(0.f, nationnal_fac_t));
 	state.world.try_create_factory_location(new_fac, p);
 	set_initial_factory_values(state, new_fac);
-	dual_ownership::on_factory_created(state, new_fac, p, is_pop_project);
 }
 
 void change_factory_type_in_province(sys::state& state, dcon::province_id p, dcon::factory_type_id t, dcon::factory_type_id refit_target) {
@@ -6764,7 +6697,6 @@ void prune_factories(sys::state& state) {
 		// to help building more healthy economy instead of 1 profitable giant factory with 6 small 0 scale factories
 		if(deletion_choice) {
 			auto production_type = state.world.factory_get_building_type(deletion_choice);
-			economy::stock_market::delist_factory(state, deletion_choice);
 			state.world.delete_factory(deletion_choice);
 
 			for(auto proj : pid.get_factory_construction()) {
@@ -6821,12 +6753,6 @@ void go_bankrupt(sys::state& state, dcon::nation_id n) {
 	state.world.nation_set_local_loan(n, 0.0f);
 	state.world.nation_set_is_debt_spending(n, false);
 	state.world.nation_set_bankrupt_until(n, state.current_date + int32_t(state.defines.bankrupcy_duration * 365));
-
-	// Macroeconomic Overhaul: Sovereign Credit Rating Default & Emergency Rate
-	auto& cb = economy::get_central_bank_mut(state, n);
-	cb.credit_rating = economy::sovereign_credit_rating::Default;
-	cb.standard = economy::currency_standard::fiat_standard;
-	cb.base_interest_rate = 0.20f;
 
 	notification::post(state, notification::message{
 		[n](sys::state& state, text::layout_base& contents) {

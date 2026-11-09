@@ -12,7 +12,6 @@
 #include <glm/glm.hpp>
 #include "alice_ui.hpp"
 #include "game_scene.hpp"
-#include "macro_finance_window.hpp"
 
 namespace ui {
 
@@ -983,8 +982,6 @@ public:
 			return make_element_by_type<minimap_goto_button>(state, id);
 		} else if(name == "ledger_button") {
 			return make_element_by_type<minimap_ledger_button>(state, id);
-		} else if(name == "finance_button" || name == "button_finance" || name == "menubar_plans_open") {
-			return make_element_by_type<minimap_macro_finance_button>(state, id);
 		} else if(name == "map_zoom_in") {
 			return make_element_by_type<minimap_zoom_in_button>(state, id);
 		} else if(name == "map_zoom_out") {
@@ -1000,7 +997,8 @@ public:
 			|| name == "menubar_msg_province"
 			|| name == "menubar_msg_event"
 			|| name == "menubar_msg_other"
-			|| name == "menubar_plans_toggle") {
+			|| name == "menubar_plans_toggle"
+			|| name == "menubar_plans_open") {
 			return make_element_by_type<invisible_element>(state, id);
 		} else if(name.starts_with(mapmode_btn_prefix)) {
 			auto ptr = make_element_by_type<minimap_mapmode_button>(state, id);

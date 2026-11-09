@@ -1,9 +1,6 @@
 #include "dcon_generated_ids.hpp"
 #include "system_state.hpp"
 #include "serialization.hpp"
-#include "dual_ownership.hpp"
-#include "central_bank.hpp"
-#include "stock_exchange.hpp"
 #include <random>
 #include <ctime>
 
@@ -854,27 +851,6 @@ uint8_t const* read_handwritten_save_section(uint8_t const* ptr_in, uint8_t cons
 		ptr_in = memcpy_deserialize(ptr_in, state.military_definitions.great_wars_enabled);
 		ptr_in = memcpy_deserialize(ptr_in, state.military_definitions.world_wars_enabled);
 	}
-	// Modern Macroeconomic Overhaul Subsystems (Dual ownership, Central Bank, Stock Exchange)
-	constexpr uint32_t ECO_SECTION_MAGIC = 0x45434F32; // 'ECO2'
-	if(ptr_in + sizeof(uint32_t) <= section_end) {
-		uint32_t magic = 0;
-		memcpy(&magic, ptr_in, sizeof(uint32_t));
-		if(magic == ECO_SECTION_MAGIC) {
-			ptr_in += sizeof(uint32_t);
-			ptr_in = economy::dual_ownership::deserialize(ptr_in);
-			ptr_in = economy::deserialize_central_banks(ptr_in);
-			ptr_in = economy::stock_market::deserialize(ptr_in);
-		} else {
-			// Legacy save / initial scenario without ECO block: initialize defaults
-			economy::dual_ownership::initialize(state);
-			economy::initialize_central_banks(state);
-			economy::stock_market::initialize(state);
-		}
-	} else {
-		economy::dual_ownership::initialize(state);
-		economy::initialize_central_banks(state);
-		economy::stock_market::initialize(state);
-	}
 	return ptr_in;
 }
 
@@ -938,12 +914,6 @@ uint8_t* write_handwritten_save_section(uint8_t* ptr_in, sys::state& state, bool
 		ptr_in = memcpy_serialize(ptr_in, state.military_definitions.great_wars_enabled);
 		ptr_in = memcpy_serialize(ptr_in, state.military_definitions.world_wars_enabled);
 	}
-	// Modern Macroeconomic Overhaul Subsystems (Dual ownership, Central Bank, Stock Exchange)
-	constexpr uint32_t ECO_SECTION_MAGIC = 0x45434F32; // 'ECO2'
-	ptr_in = memcpy_serialize(ptr_in, ECO_SECTION_MAGIC);
-	ptr_in = economy::dual_ownership::serialize(ptr_in);
-	ptr_in = economy::serialize_central_banks(ptr_in);
-	ptr_in = economy::stock_market::serialize(ptr_in);
 	return ptr_in;
 }
 
@@ -1003,11 +973,6 @@ size_t sizeof_handwritten_save_section(sys::state& state, bool exclude_local_han
 		sz += sizeof(state.military_definitions.great_wars_enabled);
 		sz += sizeof(state.military_definitions.world_wars_enabled);
 	}
-	// Modern Macroeconomic Overhaul Subsystems (Dual ownership, Central Bank, Stock Exchange)
-	sz += sizeof(uint32_t); // ECO_SECTION_MAGIC
-	sz += economy::dual_ownership::serialize_size();
-	sz += economy::serialize_central_banks_size();
-	sz += economy::stock_market::serialize_size();
 	return sz;
 }
 
