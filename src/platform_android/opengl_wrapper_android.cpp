@@ -22,12 +22,10 @@ void create_opengl_context(sys::state& state) {
 	}
 	eglSwapInterval(win.egl_display, 1); // Vsync
 
-#ifndef NDEBUG
-	glEnable(GL_DEBUG_OUTPUT);
-	glDebugMessageCallback(debug_callback, nullptr);
-	glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
-	glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_OTHER, GL_DEBUG_SEVERITY_LOW, 0, nullptr, GL_FALSE);
-#endif
+	ALICE_LOGI("OpenGL ES Context bound: vendor=%s, renderer=%s, version=%s",
+	           glGetString(GL_VENDOR) ? (const char*)glGetString(GL_VENDOR) : "unknown",
+	           glGetString(GL_RENDERER) ? (const char*)glGetString(GL_RENDERER) : "unknown",
+	           glGetString(GL_VERSION) ? (const char*)glGetString(GL_VERSION) : "unknown");
 }
 
 // o contexto EGL e destruido pelo window_android.cpp quando o app fecha

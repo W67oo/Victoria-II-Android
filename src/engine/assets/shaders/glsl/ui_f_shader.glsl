@@ -146,7 +146,7 @@ vec4 triangle_strip(vec2 tc) {
 
 	float distance_from_boundary = (0.5f - abs(tc.y - 0.5f)) * real_size / 50.f;
 
-	float gold_frame = max(0, 0.3f - distance_from_boundary) * 5.f;
+	float gold_frame = max(0.0f, 0.3f - distance_from_boundary) * 5.f;
 	float shadow = min(1.f, distance_from_boundary * 2.f + 0.1f);
 	float fade = distance_from_boundary * 6.f;
 	gold_frame = gold_frame * gold_frame * gold_frame;
@@ -212,41 +212,9 @@ vec4 corners(vec2 tc) {
 	return texture(texture_sampler, vec2(xout, yout) / border_size);
 }
 
-//layout(index = 8) subroutine(font_function_class)
-// Enhanced 9-slice adaptive frame stretcher (supports asymmetric margins in subrect)
-vec4 frame_stretch(vec2 tc) {
-	float realx = tc.x * d_rect.z;
-	float realy = tc.y * d_rect.w;
-	vec2 tsize = vec2(textureSize(texture_sampler, 0));
-
-	vec4 m = (border_size > 0.0) ? vec4(border_size, border_size, border_size, border_size) : subrect;
-	m = min(m, vec4(d_rect.z * 0.49, d_rect.w * 0.49, d_rect.z * 0.49, d_rect.w * 0.49));
-	m = min(m, vec4(tsize.x * 0.49, tsize.y * 0.49, tsize.x * 0.49, tsize.y * 0.49));
-
-	float xout = 0.0;
-	float yout = 0.0;
-
-	if(realx <= m.x) {
-		xout = realx / tsize.x;
-	} else if(realx >= (d_rect.z - m.z)) {
-		xout = (tsize.x - m.z + (realx - (d_rect.z - m.z))) / tsize.x;
-	} else {
-		float inner_screen_w = max(d_rect.z - m.x - m.z, 0.001);
-		float inner_tex_w    = max(tsize.x - m.x - m.z, 0.001);
-		xout = (m.x + inner_tex_w * ((realx - m.x) / inner_screen_w)) / tsize.x;
-	}
-
-	if(realy <= m.y) {
-		yout = realy / tsize.y;
-	} else if(realy >= (d_rect.w - m.w)) {
-		yout = (tsize.y - m.w + (realy - (d_rect.w - m.w))) / tsize.y;
-	} else {
-		float inner_screen_h = max(d_rect.w - m.y - m.w, 0.001);
-		float inner_tex_h    = max(tsize.y - m.y - m.w, 0.001);
-		yout = (m.y + inner_tex_h * ((realy - m.y) / inner_screen_h)) / tsize.y;
-	}
-
-	return texture(texture_sampler, vec2(xout, yout));
+//layout(index = 18) subroutine(font_function_class)
+vec4 transparent_color(vec2 tc) {
+	return vec4(inner_color, 0.5);
 }
 //layout(index = 19) subroutine(font_function_class)
 vec4 solid_color(vec2 tc) {

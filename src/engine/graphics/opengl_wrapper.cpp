@@ -5,6 +5,11 @@
 #include "bmfont.hpp"
 #include "gui_element_base.hpp"
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#include "android_logger.hpp"
+#endif
+
 #include "stateless_render.hpp"
 
 #undef STB_IMAGE_IMPLEMENTATION
@@ -90,16 +95,23 @@ GLint compile_shader(std::string_view source, GLenum type) {
 	glShaderSource(return_value, 2, texts, nullptr);
 	glCompileShader(return_value);
 
-	GLint result;
+	GLint result = GL_FALSE;
 	glGetShaderiv(return_value, GL_COMPILE_STATUS, &result);
 	if(result == GL_FALSE) {
 		GLint log_length = 0;
 		glGetShaderiv(return_value, GL_INFO_LOG_LENGTH, &log_length);
 
-		auto log = std::unique_ptr<char[]>(new char[static_cast<size_t>(log_length)]);
+		size_t alloc_len = static_cast<size_t>(std::max<GLint>(1, log_length) + 1);
+		auto log = std::unique_ptr<char[]>(new char[alloc_len]());
 		GLsizei written = 0;
-		glGetShaderInfoLog(return_value, log_length, &written, log.get());
-		notify_user_of_fatal_opengl_error(std::string("Shader failed to compile:\n") + log.get());
+		if(log_length > 0) {
+			glGetShaderInfoLog(return_value, log_length, &written, log.get());
+		}
+		char const* stage_str = (type == GL_VERTEX_SHADER) ? "VERTEX" : "FRAGMENT";
+#ifdef __ANDROID__
+		ALICE_LOGE("Shader (%s) failed to compile! InfoLog: %s", stage_str, log.get());
+#endif
+		notify_user_of_fatal_opengl_error(std::string("Shader (") + stage_str + ") failed to compile:\n" + log.get());
 	}
 	return return_value;
 }
@@ -117,16 +129,22 @@ GLuint create_program(std::string_view vertex_shader, std::string_view fragment_
 	glAttachShader(return_value, f_shader);
 	glLinkProgram(return_value);
 
-	GLint result;
+	GLint result = GL_FALSE;
 	glGetProgramiv(return_value, GL_LINK_STATUS, &result);
 	if(result == GL_FALSE) {
-		GLint logLen;
+		GLint logLen = 0;
 		glGetProgramiv(return_value, GL_INFO_LOG_LENGTH, &logLen);
 
-		char* log = new char[static_cast<size_t>(logLen)];
-		GLsizei written;
-		glGetProgramInfoLog(return_value, logLen, &written, log);
-		notify_user_of_fatal_opengl_error(std::string("Program failed to link:\n") + log);
+		size_t alloc_len = static_cast<size_t>(std::max<GLint>(1, logLen) + 1);
+		auto log = std::unique_ptr<char[]>(new char[alloc_len]());
+		GLsizei written = 0;
+		if(logLen > 0) {
+			glGetProgramInfoLog(return_value, logLen, &written, log.get());
+		}
+#ifdef __ANDROID__
+		ALICE_LOGE("Program failed to link! InfoLog: %s", log.get());
+#endif
+		notify_user_of_fatal_opengl_error(std::string("Program failed to link:\n") + log.get());
 	}
 
 	glDeleteShader(v_shader);
@@ -269,6 +287,11 @@ void deinitialize_framebuffer_for_province_indices(sys::state& state) {
 }
 
 void initialize_msaa(sys::state& state, int32_t size_x, int32_t size_y) {
+#ifdef __ANDROID__
+	state.user_settings.antialias_level = 0;
+	state.open_gl.msaa_enabled = false;
+	return;
+#endif
 	if(state.user_settings.antialias_level == 0)
 		return;
 	if(!size_x || !size_y)
@@ -380,7 +403,14 @@ void initialize_opengl(sys::state& state) {
 	glProvokingVertex(GL_FIRST_VERTEX_CONVENTION);
 	glEnable(GL_LINE_SMOOTH);
 
+#ifdef __ANDROID__
+	ALICE_LOGI("[OGL Substage 1/6] create_opengl_context OK, loading UI shaders...");
+#endif
 	load_shaders(state); // create shaders
+
+#ifdef __ANDROID__
+	ALICE_LOGI("[OGL Substage 2/6] load_shaders OK, loading global squares...");
+#endif
 	load_global_squares(state); // create various squares to drive the shaders with
 
 	// Allocate textures for the flags
@@ -390,13 +420,26 @@ void initialize_opengl(sys::state& state) {
 		* state.world.government_flag_size()
 	);
 
+#ifdef __ANDROID__
+	ALICE_LOGI("[OGL Substage 3/6] flag textures resized to %zu, loading map & map shaders...", state.open_gl.asset_textures.size());
+#endif
 	state.map_state.load_map(state);
 
+#ifdef __ANDROID__
+	ALICE_LOGI("[OGL Substage 4/6] map loaded OK, loading special icons...");
+#endif
 	load_special_icons(state);
 
+#ifdef __ANDROID__
+	ALICE_LOGI("[OGL Substage 5/6] special icons OK, initializing MSAA / framebuffers...");
+#endif
 	initialize_msaa(state, window::creation_parameters().size_x, window::creation_parameters().size_y);
 
 	initialize_framebuffer_for_province_indices(state, window::creation_parameters().size_x, window::creation_parameters().size_y);
+
+#ifdef __ANDROID__
+	ALICE_LOGI("[OGL Substage 6/6] provincial framebuffer initialized OK!");
+#endif
 }
 
 static const GLfloat global_square_data[] = {
@@ -478,6 +521,10 @@ void load_shaders(sys::state& state) {
 	auto root = get_root(state.common_fs);
 
 	auto prefix_shader = simple_fs::open_file(root, NATIVE("assets/shaders/glsl/_geometry.glsl"));
+	if(!prefix_shader.has_value()) {
+		notify_user_of_fatal_opengl_error("assets/shaders/glsl/_geometry.glsl could not be opened");
+		return;
+	}
 	auto prefix_content = simple_fs::view_contents(prefix_shader.value());
 	auto prefix_view = std::string_view(prefix_content.data, prefix_content.file_size);
 	ogl::set_shader_prefix(prefix_view);
@@ -501,7 +548,7 @@ void load_shaders(sys::state& state) {
 		state.open_gl.ui_shader_subrect_uniform = glGetUniformLocation(state.open_gl.ui_shader_program, "subrect");
 		state.open_gl.ui_shader_border_size_uniform = glGetUniformLocation(state.open_gl.ui_shader_program, "border_size");
 	} else {
-		notify_user_of_fatal_opengl_error("Unable to open a necessary shader file");
+		notify_user_of_fatal_opengl_error("Unable to open ui_f_shader.glsl or ui_v_shader.glsl");
 	}
 }
 

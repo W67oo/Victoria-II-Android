@@ -559,9 +559,9 @@ void android_launcher_update(sys::state& state) {
 		if(!win.game_started && win.egl_surface != EGL_NO_SURFACE) {
 			if(loader_thread.joinable())
 				loader_thread.join();
+			android_start_game(state);
 			if(!game_threads_started)
 				start_game_threads(state);
-			android_start_game(state);
 			show_progress(""); // a janela de carregamento da abertura fecha com o jogo na tela
 		}
 		break;

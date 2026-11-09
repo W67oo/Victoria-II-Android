@@ -652,7 +652,7 @@ display_data::~display_data() {
 std::optional<simple_fs::file> try_load_shader(simple_fs::directory& root, native_string_view name) {
 	auto shader = simple_fs::open_file(root, name);
 	if(!bool(shader))
-		ogl::notify_user_of_fatal_opengl_error("Unable to open a necessary shader file");
+		ogl::notify_user_of_fatal_opengl_error("Unable to open a necessary shader file: " + simple_fs::native_to_utf8(native_string(name)));
 	return shader;
 }
 
@@ -4459,16 +4459,15 @@ void display_data::load_map(sys::state& state) {
 
 	glGenTextures(1, &textures[texture_diag_border_identifier]);
 	if(textures[texture_diag_border_identifier]) {
-		assert(!diagonal_borders.empty());
-
-		glBindTexture(GL_TEXTURE_2D, textures[texture_diag_border_identifier]);
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8UI, size_x, size_y);
-		assert(size_x > 0);
-		assert(size_y > 0);
-		// assert(diagonal_borders.size() != size_x * size_y);
-		assert(size_x % 4 == 0); // The texture data might have incorrect row alignment (default is 4 bytes). If the texture width is not a multiple of 4, this can corrupt the upload.
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, size_x, size_y, GL_RED_INTEGER, GL_UNSIGNED_BYTE, diagonal_borders.data());
-		glBindTexture(GL_TEXTURE_2D, 0);
+		if(diagonal_borders.empty() && size_x > 0 && size_y > 0) {
+			diagonal_borders.resize(size_t(size_x) * size_t(size_y), 0);
+		}
+		if(size_x > 0 && size_y > 0 && diagonal_borders.size() >= size_t(size_x) * size_t(size_y)) {
+			glBindTexture(GL_TEXTURE_2D, textures[texture_diag_border_identifier]);
+			glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8UI, size_x, size_y);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, size_x, size_y, GL_RED_INTEGER, GL_UNSIGNED_BYTE, diagonal_borders.data());
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
 	}
 	ogl::set_gltex_parameters(textures[texture_diag_border_identifier], GL_TEXTURE_2D, GL_NEAREST, GL_CLAMP_TO_EDGE);
 

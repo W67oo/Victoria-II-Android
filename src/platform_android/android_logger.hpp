@@ -21,6 +21,9 @@ inline std::string g_primary_crash_path = "/storage/emulated/0/vic2_crash_log.tx
 inline std::string g_fallback_crash_path = "";
 inline std::mutex g_log_mutex;
 
+inline void write_log(int priority, const char* tag, const char* fmt, ...);
+inline void record_fatal_abort(const char* reason);
+
 // Raw async-signal-safe string writer
 inline void safe_write_str(int fd, const char* s) {
     if (fd >= 0 && s) {
@@ -139,6 +142,23 @@ inline void init_crash_handler(const char* base_dir) {
     sigaction(SIGABRT, &sa, nullptr);
     sigaction(SIGFPE, &sa, nullptr);
     sigaction(SIGILL, &sa, nullptr);
+
+    std::set_terminate([]() {
+        std::string reason = "std::terminate called without exception info";
+        std::exception_ptr ex = std::current_exception();
+        if (ex) {
+            try {
+                std::rethrow_exception(ex);
+            } catch (const std::exception& e) {
+                reason = std::string("Unhandled std::exception in terminate: ") + e.what();
+            } catch (...) {
+                reason = "Unhandled non-std exception in terminate";
+            }
+        }
+        write_log(ANDROID_LOG_FATAL, "Vic2Crash", "%s", reason.c_str());
+        record_fatal_abort(reason.c_str());
+        std::abort();
+    });
 }
 
 inline void write_log(int priority, const char* tag, const char* fmt, ...) {
@@ -165,29 +185,64 @@ inline void write_log(int priority, const char* tag, const char* fmt, ...) {
     else if (priority == ANDROID_LOG_FATAL) prio_str = "FATAL";
 
     char line_buf[2304];
-    int line_len = snprintf(line_buf, sizeof(line_buf), "[%s] [%s/%s] %s\n",
-                            time_buf, tag ? tag : "Vic2", prio_str, msg_buf);
+    int line_len = snprintf(line_buf, sizeof(line_buf), "[%s] [pid=%d] [%s/%s] %s\n",
+                            time_buf, (int)getpid(), tag ? tag : "Vic2", prio_str, msg_buf);
+    if (line_len < 0) return;
+    if (line_len >= (int)sizeof(line_buf)) line_len = (int)sizeof(line_buf) - 1;
 
     std::lock_guard<std::mutex> lock(g_log_mutex);
-    // 1. Write to app-internal fallback log (guaranteed writable without permissions)
+    // 1. Write atomically to app-internal fallback log (O_APPEND guarantees kernel-level atomicity)
     if (!g_fallback_log_path.empty()) {
-        FILE* f = fopen(g_fallback_log_path.c_str(), "a");
-        if (f) {
-            fwrite(line_buf, 1, line_len, f);
-            fflush(f);
-            fclose(f);
+        int fd = open(g_fallback_log_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (fd >= 0) {
+            (void)write(fd, line_buf, (size_t)line_len);
+            close(fd);
         }
     }
-    // 2. Write to primary public log (/storage/emulated/0/vic2_log.txt)
-    FILE* f = fopen(g_primary_log_path.c_str(), "a");
-    if (f) {
-        fwrite(line_buf, 1, line_len, f);
-        fflush(f);
-        fclose(f);
+    // 2. Write atomically to primary public log (/storage/emulated/0/vic2_log.txt)
+    int fd = open(g_primary_log_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd >= 0) {
+        (void)write(fd, line_buf, (size_t)line_len);
+        close(fd);
+    }
+}
+
+inline void record_fatal_abort(const char* reason) {
+    if (!reason) reason = "Unknown fatal error";
+    int fds[2];
+    int num_fds = 0;
+    int fd1 = open(g_primary_crash_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd1 >= 0) fds[num_fds++] = fd1;
+    if (!g_fallback_crash_path.empty()) {
+        int fd2 = open(g_fallback_crash_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (fd2 >= 0) fds[num_fds++] = fd2;
+    }
+    for (int i = 0; i < num_fds; ++i) {
+        int fd = fds[i];
+        safe_write_str(fd, "\n=======================================================\n");
+        safe_write_str(fd, "[FATAL ABORT REASON RECORDED]\n");
+        safe_write_str(fd, "Message: ");
+        safe_write_str(fd, reason);
+        safe_write_str(fd, "\nThread ID: ");
+        safe_write_int(fd, (int)gettid());
+        safe_write_str(fd, "\n=======================================================\n");
+        fsync(fd);
+        close(fd);
     }
 }
 
 } // namespace vic2_log
+
+extern "C" __attribute__((weak, visibility("default"))) void __assert2(const char* file, int line, const char* function, const char* expr) {
+    char buf[1024];
+    snprintf(buf, sizeof(buf), "[ASSERTION FAILED] %s (at %s:%d in %s)",
+             expr ? expr : "unknown",
+             file ? file : "unknown", line,
+             function ? function : "unknown");
+    vic2_log::write_log(ANDROID_LOG_FATAL, "Vic2Crash", "%s", buf);
+    vic2_log::record_fatal_abort(buf);
+    std::abort();
+}
 
 #define LAUNCHER_LOGI(...) vic2_log::write_log(ANDROID_LOG_INFO, "Vic2Launcher", __VA_ARGS__)
 #define LAUNCHER_LOGE(...) vic2_log::write_log(ANDROID_LOG_ERROR, "Vic2Launcher", __VA_ARGS__)

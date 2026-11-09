@@ -103,14 +103,15 @@ public class AliceActivity extends NativeActivity {
 	}
 
 	public static void log(int priority, String tag, String message) {
-		Log.println(priority, tag, message);
-		appendToFileLog(priority, tag, message);
 		if (nativeLibsLoaded) {
 			try {
 				nativeLog(priority, tag, message);
+				return;
 			} catch (Throwable ignored) {
 			}
 		}
+		Log.println(priority, tag, message);
+		appendToFileLog(priority, tag, message);
 	}
 
 	private static synchronized void appendToFileLog(int priority, String tag, String message) {
@@ -206,9 +207,25 @@ public class AliceActivity extends NativeActivity {
 	private static String readFileToString(File file) {
 		if (!file.exists() || !file.canRead()) return "";
 		try (FileInputStream fis = new FileInputStream(file)) {
-			byte[] data = new byte[(int) Math.min(file.length(), 65536)];
-			int n = fis.read(data);
-			return n > 0 ? new String(data, 0, n, StandardCharsets.UTF_8) : "";
+			long len = file.length();
+			int maxBytes = 131072; // Read latest 128KB tail so recent crashes are never truncated
+			if (len > maxBytes) {
+				long toSkip = len - maxBytes;
+				while (toSkip > 0) {
+					long skipped = fis.skip(toSkip);
+					if (skipped <= 0) break;
+					toSkip -= skipped;
+				}
+			}
+			int readSize = (int) Math.min(len, maxBytes);
+			byte[] data = new byte[readSize];
+			int offset = 0;
+			while (offset < readSize) {
+				int n = fis.read(data, offset, readSize - offset);
+				if (n <= 0) break;
+				offset += n;
+			}
+			return offset > 0 ? new String(data, 0, offset, StandardCharsets.UTF_8) : "";
 		} catch (Throwable t) {
 			return "";
 		}
@@ -294,8 +311,23 @@ public class AliceActivity extends NativeActivity {
 			return;
 		}
 
+		File[] logCandidates = new File[] {
+			new File(Environment.getExternalStorageDirectory(), "vic2_log.txt"),
+			getExternalFilesDir(null) != null ? new File(getExternalFilesDir(null), "vic2_log.txt") : null,
+			new File(getFilesDir(), "vic2_log.txt")
+		};
+		String runtimeLogTail = "";
+		for (File lf : logCandidates) {
+			if (lf != null && lf.exists() && lf.length() > 0) {
+				runtimeLogTail = readFileToString(lf);
+				if (!runtimeLogTail.trim().isEmpty()) break;
+			}
+		}
+
 		final File targetCrashFile = crashFile;
-		final String finalContent = crashContent;
+		final String finalContent = runtimeLogTail.isEmpty()
+			? crashContent
+			: (crashContent + "\n--- 最近运行日志 (vic2_log.txt) ---\n" + runtimeLogTail);
 
 		ScrollView scrollView = new ScrollView(this);
 		int pad = (int) (16 * getResources().getDisplayMetrics().density);

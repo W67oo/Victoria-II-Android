@@ -953,10 +953,17 @@ void android_start_game(sys::state& state) {
 	assert(win.egl_surface != EGL_NO_SURFACE && !win.game_started);
 	ALICE_LOGI("iniciando o jogo (OpenGL, som, on_create)");
 
-	ogl::initialize_opengl(state);
+	// CRITICAL: Always disable MSAA on Android before initializing OpenGL to prevent FBO abort
+	state.user_settings.antialias_level = 0;
 
+	ALICE_LOGI("[Milestone 1/5] Starting ogl::initialize_opengl...");
+	ogl::initialize_opengl(state);
+	ALICE_LOGI("[Milestone 1/5] ogl::initialize_opengl finished successfully");
+
+	ALICE_LOGI("[Milestone 2/5] Starting sound::initialize_sound_system...");
 	sound::initialize_sound_system(state);
 	sound::start_music(state, state.user_settings.master_volume * state.user_settings.music_volume);
+	ALICE_LOGI("[Milestone 2/5] sound system initialized");
 
 	// equivalente ao on_window_change inicial do window_nix.cpp
 	int32_t const width = win.render_width;
@@ -995,13 +1002,18 @@ void android_start_game(sys::state& state) {
 		ALICE_LOGI("primeira execucao: escala da interface %.2f (desenho %dx%d, %d dpi efetivos), MSAA desligado", state.user_settings.ui_scale, width, height, render_density);
 	}
 
+	ALICE_LOGI("[Milestone 3/5] on_resize (%dx%d)...", width, height);
 	state.on_resize(width, height, window_state::maximized);
 	state.x_size = width;
 	state.y_size = height;
 
+	ALICE_LOGI("[Milestone 4/5] Starting state.on_create (Lua UI & Templates)...");
 	state.on_create();
+	ALICE_LOGI("[Milestone 4/5] state.on_create finished successfully!");
+
 	win.loading = false;
 	win.game_started = true;
+	ALICE_LOGI("[Milestone 5/5] Victoria 2 Mobile started successfully! Entering main render loop.");
 
 	// Esta thread le o toque e desenha. Com o tempo correndo, a simulacao ocupa
 	// todos os nucleos (thread do jogo + workers do TBB) e, com a mesma
@@ -1061,9 +1073,15 @@ void change_cursor(sys::state& state, cursor_type type) {
 }
 
 void emit_error_message(std::string const& content, bool fatal) {
+	if(fatal) {
+		vic2_log::write_log(ANDROID_LOG_FATAL, "Vic2Window", "[FATAL ERROR] %s", content.c_str());
+		vic2_log::record_fatal_abort(content.c_str());
+	} else {
+		vic2_log::write_log(ANDROID_LOG_ERROR, "Vic2Window", "[ERROR] %s", content.c_str());
+	}
 	__android_log_print(fatal ? ANDROID_LOG_FATAL : ANDROID_LOG_ERROR, "Alice", "%s", content.c_str());
 	if(fatal) {
-		std::abort(); // std::exit não é seguro de dentro do processo do app Android
+		std::abort();
 	}
 }
 
